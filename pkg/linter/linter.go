@@ -94,7 +94,7 @@ func (fwa *fileWithAPIAdapter) GetExportedDecls() []output.ExportedDecl {
 }
 
 // Run executes the linter on the specified project path
-func Run(projectPath string, format string) (string, string, error) {
+func Run(projectPath string, format string, detailed bool) (string, string, error) {
 	// Load configuration
 	cfg, err := config.Load(projectPath)
 	if err != nil {
@@ -121,19 +121,50 @@ func Run(projectPath string, format string) (string, string, error) {
 
 	// Scan files
 	s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths)
-	files, err := s.Scan(cfg.ScanPaths)
-	if err != nil {
-		return "", "", err
-	}
 
-	// Convert scanner.FileInfo to graph.FileInfo interface
-	graphFiles := make([]graph.FileInfo, len(files))
-	for i, f := range files {
-		graphFiles[i] = f
-	}
+	var g *graph.Graph
 
-	// Build dependency graph
-	g := graph.Build(graphFiles, cfg.Module)
+	if detailed {
+		// Scan with detailed symbol tracking
+		detailedFiles, err := s.ScanDetailed(cfg.ScanPaths)
+		if err != nil {
+			return "", "", err
+		}
+
+		// Convert to graph.FileInfo interface
+		graphFiles := make([]graph.FileInfo, len(detailedFiles))
+		for i := range detailedFiles {
+			graphFiles[i] = detailedFiles[i].FileInfo
+		}
+
+		// Build usage map: file RelPath -> (import path -> used symbols)
+		usageMap := make(map[string]map[string][]string)
+		for _, file := range detailedFiles {
+			fileUsageMap := make(map[string][]string)
+			for _, usage := range file.ImportUsages {
+				fileUsageMap[usage.ImportPath] = usage.UsedSymbols
+			}
+			usageMap[file.FileInfo.RelPath] = fileUsageMap
+		}
+
+		// Build detailed dependency graph
+		g = graph.BuildDetailed(graphFiles, cfg.Module, usageMap)
+	} else {
+		// Standard scan
+		files, err := s.Scan(cfg.ScanPaths)
+		if err != nil {
+			return "", "", err
+		}
+
+		// Convert scanner.FileInfo to graph.FileInfo interface
+		graphFiles := make([]graph.FileInfo, len(files))
+		for i, f := range files {
+			graphFiles[i] = f
+		}
+
+		// Build dependency graph
+		g = graph.Build(graphFiles, cfg.Module)
+	}
 
 	// Validate using adapter
 	validatorGraph := &graphAdapter{g: g}

@@ -26,7 +26,8 @@ go-arch-lint [path]
 
 ### Flags
 
-- `--format markdown` - Output format for dependency graph (default: markdown)
+- `--format string` - Output format: `markdown` for dependency graph (default), `api` for public API documentation
+- `--detailed` - Show method-level dependencies (which specific functions/types are used from each package)
 - `--strict` - Fail on any violations (default: true)
 - `--exit-zero` - Don't fail on violations, report only
 
@@ -35,6 +36,12 @@ go-arch-lint [path]
 ```bash
 # Scan current directory
 go-arch-lint .
+
+# Scan with detailed method-level dependencies
+go-arch-lint -detailed .
+
+# Generate public API documentation
+go-arch-lint . --format api
 
 # Scan specific directory
 go-arch-lint /path/to/project
@@ -107,7 +114,26 @@ The tool enforces the following dependency rules:
 The tool generates two outputs:
 
 1. **Dependency Graph** (stdout): Markdown format showing all file-level dependencies
+   - Standard mode: Shows which packages each file imports
+   - Detailed mode (`-detailed`): Shows which specific methods/types are used from each package
 2. **Violation Report** (stderr): List of violations with explanations and fixes
+
+### Example Dependency Graph (Detailed Mode)
+
+```markdown
+## pkg/linter/linter.go
+depends on:
+  - local:internal/config
+    - Load
+  - local:internal/graph
+    - Build
+    - BuildDetailed
+    - FileInfo
+  - local:internal/validator
+    - New
+```
+
+This shows that `pkg/linter/linter.go` uses the `Load` function from `internal/config`, the `Build`, `BuildDetailed`, and `FileInfo` from `internal/graph`, etc.
 
 ### Example Violation Report
 
@@ -153,13 +179,16 @@ architecture-lint:
 ## Documentation
 
 - **[Architecture Guide](docs/architecture.md)** - Detailed explanation of the architecture principles, domain model, and how to write code aligned with strict rules
-- **[Generated Dependency Graph](docs/arch-generated.md)** - Output from running the linter on itself (zero violations)
+- **[Generated Dependency Graph](docs/arch-generated.md)** - Method-level dependency graph from running the linter on itself (zero violations)
+- **[Public API Documentation](docs/public-api-generated.md)** - Complete public API surface of all packages
 
 The architecture documentation includes:
 - Domain model and package boundaries
 - Dependency Inversion Principle implementation in Go
 - Adapter pattern for handling slice covariance
 - Step-by-step guide for writing code with strict `internal: []` rules
+
+The generated dependency graph uses detailed mode to show exactly which methods and types are used between packages, providing clear visibility into API usage patterns.
 
 ## License
 

@@ -13,9 +13,10 @@ type FileInfo interface {
 }
 
 type Dependency struct {
-	ImportPath string // Full import path
-	IsLocal    bool   // Whether this is a local (project) import
-	LocalPath  string // Relative path for local imports (e.g., "pkg/http")
+	ImportPath  string   // Full import path
+	IsLocal     bool     // Whether this is a local (project) import
+	LocalPath   string   // Relative path for local imports (e.g., "pkg/http")
+	UsedSymbols []string // Symbols used from this import (empty if not tracked)
 }
 
 // Methods for adapter pattern (structural typing - no imports needed)
@@ -29,6 +30,10 @@ func (d Dependency) GetLocalPath() string {
 
 func (d Dependency) IsLocalDep() bool {
 	return d.IsLocal
+}
+
+func (d Dependency) GetUsedSymbols() []string {
+	return d.UsedSymbols
 }
 
 type FileNode struct {
@@ -88,20 +93,70 @@ func Build(files []FileInfo, module string) *Graph {
 	return g
 }
 
+// BuildDetailed creates a dependency graph with detailed symbol usage from scanned files
+// usageMap is a map from file RelPath to (import path to used symbols)
+func BuildDetailed(files []FileInfo, module string, usageMap map[string]map[string][]string) *Graph {
+	g := &Graph{
+		Nodes:         make([]FileNode, 0, len(files)),
+		module:        module,
+		localPackages: make(map[string]bool),
+	}
+
+	// First pass: collect all local packages
+	for _, file := range files {
+		// Get package path from file location
+		dir := filepath.Dir(file.GetRelPath())
+		dir = filepath.ToSlash(dir)
+		g.localPackages[dir] = true
+	}
+
+	// Second pass: build dependencies with usage information
+	for _, file := range files {
+		node := FileNode{
+			RelPath:      file.GetRelPath(),
+			Package:      file.GetPackage(),
+			Dependencies: make([]Dependency, 0),
+		}
+
+		// Get usage information for this file
+		fileUsageMap := usageMap[file.GetRelPath()]
+		if fileUsageMap == nil {
+			fileUsageMap = make(map[string][]string)
+		}
+
+		// Create dependencies with symbol information
+		imports := file.GetImports()
+		for _, imp := range imports {
+			dep := g.classifyImportDetailed(imp, fileUsageMap[imp])
+			node.Dependencies = append(node.Dependencies, dep)
+		}
+
+		g.Nodes = append(g.Nodes, node)
+	}
+
+	return g
+}
+
 func (g *Graph) classifyImport(importPath string) Dependency {
+	return g.classifyImportDetailed(importPath, nil)
+}
+
+func (g *Graph) classifyImportDetailed(importPath string, usedSymbols []string) Dependency {
 	// Check if it's a local import (starts with module path)
 	if strings.HasPrefix(importPath, g.module) {
 		localPath := strings.TrimPrefix(importPath, g.module+"/")
 		return Dependency{
-			ImportPath: importPath,
-			IsLocal:    true,
-			LocalPath:  localPath,
+			ImportPath:  importPath,
+			IsLocal:     true,
+			LocalPath:   localPath,
+			UsedSymbols: usedSymbols,
 		}
 	}
 
 	return Dependency{
-		ImportPath: importPath,
-		IsLocal:    false,
+		ImportPath:  importPath,
+		IsLocal:     false,
+		UsedSymbols: usedSymbols,
 	}
 }
 

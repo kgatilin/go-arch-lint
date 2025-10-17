@@ -70,7 +70,7 @@ func Run() {}
 	}
 
 	// Run linter with markdown format
-	graphOutput, violationsOutput, err := linter.Run(tmpDir, "markdown")
+	graphOutput, violationsOutput, err := linter.Run(tmpDir, "markdown", false)
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -144,7 +144,7 @@ const Version = "1.0"
 	}
 
 	// Run linter with api format
-	apiOutput, violationsOutput, err := linter.Run(tmpDir, "api")
+	apiOutput, violationsOutput, err := linter.Run(tmpDir, "api", false)
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -235,7 +235,7 @@ func Helper() {}
 	}
 
 	// Run linter
-	_, violationsOutput, err := linter.Run(tmpDir, "markdown")
+	_, violationsOutput, err := linter.Run(tmpDir, "markdown", false)
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestRun_InvalidConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// No .goarchlint file
-	_, _, err := linter.Run(tmpDir, "markdown")
+	_, _, err := linter.Run(tmpDir, "markdown", false)
 	if err == nil {
 		t.Error("expected error for missing config")
 	}
