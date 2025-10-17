@@ -162,3 +162,237 @@ func TestScan_NonExistentPath(t *testing.T) {
 		t.Errorf("expected 0 files, got %d", len(files))
 	}
 }
+
+func TestScanWithAPI_ExtractsExportedDeclarations(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create test file with various exported declarations
+	pkgDir := filepath.Join(tmpDir, "pkg", "api")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	apiGo := `package api
+
+import "context"
+
+// Exported type
+type Service struct {
+	Name string
+}
+
+// Exported function
+func NewService(name string) *Service {
+	return &Service{Name: name}
+}
+
+// Exported method
+func (s *Service) GetName() string {
+	return s.Name
+}
+
+// Exported method with multiple params and returns
+func (s *Service) Process(ctx context.Context, data []byte) (string, error) {
+	return "", nil
+}
+
+// unexported function
+func helper() {}
+
+// Exported constant
+const MaxRetries = 3
+
+// Exported variable
+var DefaultTimeout = 30
+
+// unexported var
+var internal = 10
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "api.go"), []byte(apiGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := scanner.New(tmpDir, "github.com/test/project", nil)
+	files, err := s.ScanWithAPI([]string{"pkg"})
+	if err != nil {
+		t.Fatalf("ScanWithAPI failed: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+
+	file := files[0]
+	if file.Package != "api" {
+		t.Errorf("expected package api, got %s", file.Package)
+	}
+
+	// Check exported declarations
+	decls := file.ExportedDecls
+	if len(decls) == 0 {
+		t.Fatal("expected exported declarations, got none")
+	}
+
+	// Verify we have the expected types
+	hasService := false
+	hasNewService := false
+	hasGetName := false
+	hasProcess := false
+	hasMaxRetries := false
+	hasDefaultTimeout := false
+
+	for _, decl := range decls {
+		switch {
+		case decl.Name == "Service" && decl.Kind == "type":
+			hasService = true
+		case decl.Name == "NewService" && decl.Kind == "func":
+			hasNewService = true
+		case decl.Name == "GetName" && decl.Kind == "func":
+			hasGetName = true
+		case decl.Name == "Process" && decl.Kind == "func":
+			hasProcess = true
+		case decl.Name == "MaxRetries" && decl.Kind == "const":
+			hasMaxRetries = true
+		case decl.Name == "DefaultTimeout" && decl.Kind == "var":
+			hasDefaultTimeout = true
+		case decl.Name == "helper" || decl.Name == "internal":
+			t.Errorf("unexported declaration should not be included: %s", decl.Name)
+		}
+	}
+
+	if !hasService {
+		t.Error("missing Service type")
+	}
+	if !hasNewService {
+		t.Error("missing NewService function")
+	}
+	if !hasGetName {
+		t.Error("missing GetName method")
+	}
+	if !hasProcess {
+		t.Error("missing Process method")
+	}
+	if !hasMaxRetries {
+		t.Error("missing MaxRetries constant")
+	}
+	if !hasDefaultTimeout {
+		t.Error("missing DefaultTimeout variable")
+	}
+}
+
+func TestScanWithAPI_InterfaceMethods(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	testGo := `package pkg
+
+type User struct {
+	Name string
+}
+
+const Version = "1.0"
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "test.go"), []byte(testGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := scanner.New(tmpDir, "github.com/test/project", nil)
+	files, err := s.ScanWithAPI([]string{"pkg"})
+	if err != nil {
+		t.Fatalf("ScanWithAPI failed: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+
+	file := files[0]
+
+	// Test interface methods
+	if file.GetPackage() != "pkg" {
+		t.Errorf("GetPackage() = %s, want pkg", file.GetPackage())
+	}
+
+	if file.GetRelPath() == "" {
+		t.Error("GetRelPath() should not be empty")
+	}
+
+	// Test ExportedDecl interface methods
+	if len(file.ExportedDecls) > 0 {
+		decl := file.ExportedDecls[0]
+		if decl.GetName() == "" {
+			t.Error("GetName() should not be empty")
+		}
+		if decl.GetKind() == "" {
+			t.Error("GetKind() should not be empty")
+		}
+		if decl.GetSignature() == "" {
+			t.Error("GetSignature() should not be empty")
+		}
+	}
+}
+
+func TestScanWithAPI_ComplexSignatures(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	complexGo := `package pkg
+
+import "context"
+
+// Function with variadic params
+func Log(format string, args ...interface{}) {}
+
+// Function with map and slice types
+func Process(data map[string][]byte) error {
+	return nil
+}
+
+// Function with channel
+func Watch(ctx context.Context) chan string {
+	return nil
+}
+
+// Function with function type
+func Apply(fn func(string) string) {}
+
+// Method with pointer receiver
+func (*Handler) Handle() {}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "complex.go"), []byte(complexGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := scanner.New(tmpDir, "github.com/test/project", nil)
+	files, err := s.ScanWithAPI([]string{"pkg"})
+	if err != nil {
+		t.Fatalf("ScanWithAPI failed: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+
+	file := files[0]
+	if len(file.ExportedDecls) == 0 {
+		t.Fatal("expected exported declarations")
+	}
+
+	// Verify we can build signatures for complex types
+	for _, decl := range file.ExportedDecls {
+		if decl.Signature == "" {
+			t.Errorf("empty signature for %s", decl.Name)
+		}
+		if decl.Signature == "unknown" {
+			t.Errorf("unknown signature for %s", decl.Name)
+		}
+	}
+}
