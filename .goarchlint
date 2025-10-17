@@ -1,0 +1,20 @@
+# go-arch-lint configuration for this project
+#
+# This meta-tool follows its own strict architectural rules with ZERO violations.
+# The architecture demonstrates:
+# - Strict unidirectional dependency flow: cmd → pkg → internal
+# - Dependency Inversion Principle: internal packages define interfaces, pkg contains adapters
+# - Complete isolation of internal packages (internal: [])
+#
+# See docs/architecture.md for detailed explanation of the design principles.
+
+# Validation rules
+rules:
+  # Define what each directory type can import
+  directories_import:
+    cmd: [pkg] # cmd is the wiring layer, imports business logic and primitives
+    pkg: [internal] # pkg can import internal primitives and other pkg for pragmatic reasons
+    internal: [] # internal packages are primitives with no dependencies
+
+  # Detect unused packages (packages not transitively imported by cmd)
+  detect_unused: false # Disabled for this meta-tool to avoid self-referential issues
