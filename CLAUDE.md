@@ -29,11 +29,12 @@ go test ./internal/validator -run TestValidate_PkgToPkgViolation
 
 # Run with different output formats
 ./go-arch-lint . --format markdown   # Dependency graph (default)
+./go-arch-lint -detailed .           # Detailed method-level dependencies
 ./go-arch-lint . --format api        # Public API documentation
 ./go-arch-lint . --exit-zero         # Don't fail on violations
 
 # Update generated documentation
-./go-arch-lint . --format markdown > docs/arch-generated.md 2>&1
+./go-arch-lint -detailed . --format markdown > docs/arch-generated.md 2>&1
 ./go-arch-lint . --format api > docs/public-api-generated.md 2>&1
 ```
 
@@ -141,7 +142,7 @@ Each internal package is a **completely isolated primitive** with a single respo
 
 **cmd/go-arch-lint/main.go** is minimal:
 - Only imports `pkg/linter`
-- Parses CLI flags (`--format`, `--strict`, `--exit-zero`)
+- Parses CLI flags (`--format`, `--detailed`, `--strict`, `--exit-zero`)
 - Calls `linter.Run()`
 - Handles exit codes (0 = clean, 1 = violations, 2 = error)
 
@@ -207,8 +208,9 @@ The tool validates 5 types of architectural violations:
 
 - **pkg/linter/linter.go** - All adapters live here, the heart of dependency inversion
 - **.goarchlint** - Configuration for this project (strict mode: `internal: []`)
+- **README.md** - User-facing documentation with usage, flags, examples, and configuration
 - **@docs/architecture.md** - Comprehensive guide to the architecture principles
-- **@docs/arch-generated.md** - Generated dependency graph (proof of zero violations)
+- **@docs/arch-generated.md** - Generated dependency graph with method-level details (proof of zero violations)
 - **@docs/public-api-generated.md** - Generated public API documentation
 
 ## What Makes This Architecture Work
@@ -236,13 +238,21 @@ The tool validates 5 types of architectural violations:
 1. **Run tests**: `go test ./...` (ensure test coverage stays at 70-80%+)
 2. **Rebuild if needed**: `go build -o go-arch-lint ./cmd/go-arch-lint`
 3. **Run linter on itself**: `./go-arch-lint .` (must show zero violations)
-4. **Update generated documentation** (if changes affect architecture or public API):
+4. **Update generated documentation** (if changes affect architecture, public API, CLI flags, or usage):
    ```bash
-   ./go-arch-lint . --format markdown > docs/arch-generated.md 2>&1
+   # Update dependency graph with method-level details
+   ./go-arch-lint -detailed . --format markdown > docs/arch-generated.md 2>&1
+
+   # Update public API documentation
    ./go-arch-lint . --format api > docs/public-api-generated.md 2>&1
    ```
-5. **Verify alignment**: Check that new public APIs and dependencies align with @docs/architecture.md
-6. If you added new domain logic, ensure it's in an `internal/` package
-7. If you modified interfaces, update adapters in `pkg/linter/linter.go` and test files
+5. **Update README.md** (if changes affect usage, flags, configuration, or examples):
+   - Update flags section if new CLI options were added
+   - Update examples if new usage patterns are introduced
+   - Update output examples if format changed
+   - Keep README aligned with actual tool behavior
+6. **Verify alignment**: Check that new public APIs and dependencies align with @docs/architecture.md
+7. If you added new domain logic, ensure it's in an `internal/` package
+8. If you modified interfaces, update adapters in `pkg/linter/linter.go` and test files
 
 This architecture is intentionally strict to serve as a proof-of-concept. The zero-violation requirement is non-negotiable.

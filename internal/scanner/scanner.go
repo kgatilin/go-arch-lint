@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -15,6 +16,34 @@ type FileInfo struct {
 	RelPath     string   // Path relative to project root
 	Package     string   // Package name
 	Imports     []string // Import paths
+}
+
+// ImportUsage tracks which symbols are used from an import
+type ImportUsage struct {
+	ImportPath  string   // Full import path
+	UsedSymbols []string // Symbols used from this import (e.g., ["Run", "New"])
+}
+
+// GetImportPath implements graph.ImportUsage interface
+func (iu ImportUsage) GetImportPath() string {
+	return iu.ImportPath
+}
+
+// GetUsedSymbols implements graph.ImportUsage interface
+func (iu ImportUsage) GetUsedSymbols() []string {
+	return iu.UsedSymbols
+}
+
+// FileInfoDetailed extends FileInfo with detailed usage information
+type FileInfoDetailed struct {
+	FileInfo
+	ImportUsages []ImportUsage
+}
+
+// GetImportUsages returns the import usages
+// This method allows FileInfoDetailed to satisfy interfaces via structural typing
+func (f FileInfoDetailed) GetImportUsages() []ImportUsage {
+	return f.ImportUsages
 }
 
 // ExportedDecl represents an exported declaration (func, type, const, var)
@@ -117,6 +146,54 @@ func (s *Scanner) Scan(scanPaths []string) ([]FileInfo, error) {
 			}
 
 			fileInfo, err := s.parseFile(path)
+			if err != nil {
+				return fmt.Errorf("parsing %s: %w", path, err)
+			}
+
+			files = append(files, fileInfo)
+			return nil
+		})
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return files, nil
+}
+
+// ScanDetailed walks the specified paths and parses all Go files with detailed import usage
+func (s *Scanner) ScanDetailed(scanPaths []string) ([]FileInfoDetailed, error) {
+	var files []FileInfoDetailed
+
+	for _, scanPath := range scanPaths {
+		fullPath := filepath.Join(s.projectPath, scanPath)
+
+		// Check if path exists
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			continue // Skip non-existent paths
+		}
+
+		err := filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			// Skip directories
+			if info.IsDir() {
+				// Check if directory should be ignored
+				if s.shouldIgnore(path) {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
+			// Only process .go files, skip test files
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+
+			fileInfo, err := s.parseFileDetailed(path)
 			if err != nil {
 				return fmt.Errorf("parsing %s: %w", path, err)
 			}
@@ -389,6 +466,87 @@ func exprToString(expr ast.Expr) string {
 	default:
 		return "unknown"
 	}
+}
+
+func (s *Scanner) parseFileDetailed(path string) (FileInfoDetailed, error) {
+	relPath, err := filepath.Rel(s.projectPath, path)
+	if err != nil {
+		return FileInfoDetailed{}, err
+	}
+
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+	if err != nil {
+		return FileInfoDetailed{}, err
+	}
+
+	// Build map of package names to import paths
+	importMap := make(map[string]string) // package name -> import path
+	var imports []string
+
+	for _, imp := range node.Imports {
+		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // Remove quotes
+		imports = append(imports, importPath)
+
+		// Determine package name (either explicit alias or last segment of import path)
+		var pkgName string
+		if imp.Name != nil {
+			pkgName = imp.Name.Name
+		} else {
+			// Use last segment of import path as package name
+			parts := strings.Split(importPath, "/")
+			pkgName = parts[len(parts)-1]
+		}
+		importMap[pkgName] = importPath
+	}
+
+	// Extract used symbols from each import
+	usageMap := make(map[string]map[string]bool) // import path -> set of used symbols
+	for _, importPath := range imports {
+		usageMap[importPath] = make(map[string]bool)
+	}
+
+	// Walk AST to find selector expressions (e.g., pkg.Function)
+	ast.Inspect(node, func(n ast.Node) bool {
+		if sel, ok := n.(*ast.SelectorExpr); ok {
+			// Check if the selector's X is an identifier (package name)
+			if ident, ok := sel.X.(*ast.Ident); ok {
+				// Look up the import path for this package
+				if importPath, exists := importMap[ident.Name]; exists {
+					// Record the used symbol
+					usageMap[importPath][sel.Sel.Name] = true
+				}
+			}
+		}
+		return true
+	})
+
+	// Convert usage map to ImportUsage slice
+	var importUsages []ImportUsage
+	for importPath, symbols := range usageMap {
+		if len(symbols) > 0 {
+			usedSymbols := make([]string, 0, len(symbols))
+			for symbol := range symbols {
+				usedSymbols = append(usedSymbols, symbol)
+			}
+			// Sort for consistent output
+			sort.Strings(usedSymbols)
+			importUsages = append(importUsages, ImportUsage{
+				ImportPath:  importPath,
+				UsedSymbols: usedSymbols,
+			})
+		}
+	}
+
+	return FileInfoDetailed{
+		FileInfo: FileInfo{
+			Path:    path,
+			RelPath: relPath,
+			Package: node.Name.Name,
+			Imports: imports,
+		},
+		ImportUsages: importUsages,
+	}, nil
 }
 
 func extractStructFields(typeExpr ast.Expr) []string {

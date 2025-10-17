@@ -11,6 +11,7 @@ type Dependency interface {
 	GetImportPath() string
 	IsLocalDep() bool
 	GetLocalPath() string
+	GetUsedSymbols() []string
 }
 
 // FileNode interface for rendering file nodes
@@ -86,8 +87,22 @@ func GenerateMarkdown(g Graph) string {
 		for _, dep := range deps {
 			if dep.IsLocalDep() {
 				sb.WriteString(fmt.Sprintf("  - local:%s\n", dep.GetLocalPath()))
+				// Add used symbols if available
+				usedSymbols := dep.GetUsedSymbols()
+				if len(usedSymbols) > 0 {
+					for _, symbol := range usedSymbols {
+						sb.WriteString(fmt.Sprintf("    - %s\n", symbol))
+					}
+				}
 			} else if !isStdLib(dep.GetImportPath()) {
 				sb.WriteString(fmt.Sprintf("  - external:%s\n", dep.GetImportPath()))
+				// Add used symbols if available
+				usedSymbols := dep.GetUsedSymbols()
+				if len(usedSymbols) > 0 {
+					for _, symbol := range usedSymbols {
+						sb.WriteString(fmt.Sprintf("    - %s\n", symbol))
+					}
+				}
 			}
 		}
 
