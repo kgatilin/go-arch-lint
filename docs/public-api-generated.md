@@ -31,9 +31,11 @@
     - ImportPath string
     - IsLocal bool
     - LocalPath string
+    - UsedSymbols []string
   - Methods:
     - (Dependency) GetImportPath() string
     - (Dependency) GetLocalPath() string
+    - (Dependency) GetUsedSymbols() []string
     - (Dependency) IsLocalDep() bool
 - *FileInfo*
 - **FileNode**
@@ -53,13 +55,15 @@
 ### Package Functions
 
 - Build([]FileInfo, string) *Graph
+- BuildDetailed([]FileInfo, string, map[string]map[string][]string) *Graph
 - IsStdLib(string) bool
 
 ## linter
 
 ### Package Functions
 
-- Run(string, string) (string, string, error)
+- Init(string) error
+- Run(string, string, bool) (string, string, error)
 
 ## output
 
@@ -103,15 +107,29 @@
     - (FileInfo) GetImports() []string
     - (FileInfo) GetPackage() string
     - (FileInfo) GetRelPath() string
+- **FileInfoDetailed**
+  - Properties:
+    - FileInfo
+    - ImportUsages []ImportUsage
+  - Methods:
+    - (FileInfoDetailed) GetImportUsages() []ImportUsage
 - **FileInfoWithAPI**
   - Properties:
     - FileInfo
     - ExportedDecls []ExportedDecl
   - Methods:
     - (FileInfoWithAPI) GetPackage() string
+- **ImportUsage**
+  - Properties:
+    - ImportPath string
+    - UsedSymbols []string
+  - Methods:
+    - (ImportUsage) GetImportPath() string
+    - (ImportUsage) GetUsedSymbols() []string
 - **Scanner**
   - Methods:
     - (*Scanner) Scan([]string) ([]FileInfo, error)
+    - (*Scanner) ScanDetailed([]string) ([]FileInfoDetailed, error)
     - (*Scanner) ScanWithAPI([]string) ([]FileInfoWithAPI, error)
 
 ### Package Functions

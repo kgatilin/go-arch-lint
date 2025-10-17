@@ -3,6 +3,7 @@
 ## cmd/go-arch-lint/main.go
 depends on:
   - local:pkg/linter
+    - Init
     - Run
 
 ## internal/config/config.go
