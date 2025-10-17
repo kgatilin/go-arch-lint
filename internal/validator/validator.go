@@ -169,13 +169,21 @@ func (v *Validator) validateFile(node FileNode) []Violation {
 		// Rule 4: Check directory import rules from config
 		dirImports := v.cfg.GetDirectoriesImport()
 		if allowed, exists := dirImports[fileTopDir]; exists {
-			if !v.isImportAllowed(depTopDir, allowed) && depTopDir != fileTopDir {
+			// Check if the import is allowed
+			// This includes checking same-directory imports (e.g., internal importing internal)
+			if !v.isImportAllowed(depTopDir, allowed) {
+				// Determine appropriate fix message
+				fixMsg := "Restructure dependencies according to allowed imports"
+				if fileTopDir == "internal" && depTopDir == "internal" {
+					fixMsg = "Use interfaces and dependency inversion instead of direct imports"
+				}
+
 				violations = append(violations, Violation{
 					Type:  ViolationForbidden,
 					File:  node.GetRelPath(),
 					Issue: fmt.Sprintf("%s imports %s", fileDir, localPath),
 					Rule:  fmt.Sprintf("%s can only import from: %v", fileTopDir, allowed),
-					Fix:   "Restructure dependencies according to allowed imports",
+					Fix:   fixMsg,
 				})
 			}
 		}

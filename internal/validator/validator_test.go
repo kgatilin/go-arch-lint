@@ -275,6 +275,65 @@ func TestValidate_UnusedPackage(t *testing.T) {
 	}
 }
 
+func TestValidate_InternalToInternalViolation(t *testing.T) {
+	// Regression test for bug where internal: [] did not catch internal-to-internal imports
+	files := []scanner.FileInfo{
+		{
+			RelPath: "internal/output/markdown.go",
+			Package: "output",
+			Imports: []string{
+				"github.com/test/project/internal/graph",
+			},
+		},
+		{
+			RelPath: "internal/graph/graph.go",
+			Package: "graph",
+		},
+	}
+
+	g := graph.Build(toGraphFiles(files), "github.com/test/project")
+
+	cfg := &config.Config{
+		Module: "github.com/test/project",
+		Rules: config.Rules{
+			DirectoriesImport: map[string][]string{
+				"cmd":      {"pkg"},
+				"pkg":      {"internal"},
+				"internal": {}, // Empty array - internal packages cannot import anything
+			},
+			DetectUnused: false,
+		},
+	}
+
+	v := New(cfg, &testGraphAdapter{g: g})
+	violations := v.Validate()
+
+	if len(violations) == 0 {
+		t.Fatal("expected violation for internal-to-internal import with internal: [], got none")
+	}
+
+	found := false
+	for _, viol := range violations {
+		if viol.Type == ViolationForbidden && viol.File == "internal/output/markdown.go" {
+			found = true
+			if viol.Rule != "internal can only import from: []" {
+				t.Errorf("expected rule 'internal can only import from: []', got %q", viol.Rule)
+			}
+			if viol.Fix != "Use interfaces and dependency inversion instead of direct imports" {
+				t.Errorf("expected specific fix message for internal-to-internal, got %q", viol.Fix)
+			}
+			break
+		}
+	}
+
+	if !found {
+		t.Error("expected ViolationForbidden for internal/output importing internal/graph")
+		for _, viol := range violations {
+			t.Logf("  got: %v - %s", viol.Type, viol.Issue)
+		}
+	}
+}
+
 func TestValidate_NoViolations(t *testing.T) {
 	files := []scanner.FileInfo{
 		{
