@@ -18,10 +18,34 @@ cd go-arch-lint
 go build -o go-arch-lint ./cmd/go-arch-lint
 ```
 
+## Quick Start
+
+Initialize a new project with go-arch-lint:
+
+```bash
+# Navigate to your project
+cd /path/to/your/project
+
+# Initialize with default configuration
+go-arch-lint init
+
+# This creates:
+# - .goarchlint (configuration file with strict 3-layer architecture)
+# - docs/arch-generated.md (dependency graph documentation)
+# - docs/public-api-generated.md (public API documentation)
+# - docs/goarch_agent_instructions.md (instructions for AI coding agents)
+```
+
+The `init` command sets up a strict 3-layer architecture (`cmd → pkg → internal`) with complete isolation of internal packages. Add `docs/goarch_agent_instructions.md` to your `CLAUDE.md` to guide AI agents on maintaining the architecture.
+
 ## Usage
 
 ```bash
+# Validate architecture (shows violations if any)
 go-arch-lint [path]
+
+# Initialize new project with default config
+go-arch-lint init [path]
 ```
 
 ### Flags
