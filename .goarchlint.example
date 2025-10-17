@@ -1,0 +1,27 @@
+# Example .goarchlint configuration file
+# Copy this to .goarchlint and customize for your project
+
+# Root module path (auto-detected from go.mod if not specified)
+module: github.com/user/project
+
+# Directories to analyze
+scan_paths:
+  - cmd
+  - pkg
+  - internal
+
+# Directories to ignore
+ignore_paths:
+  - vendor
+  - testdata
+
+# Validation rules
+rules:
+  # Define what each directory type can import
+  directories_import:
+    cmd: [pkg, internal]
+    pkg: [internal]
+    internal: [internal]
+
+  # Detect unused packages (packages not transitively imported by cmd)
+  detect_unused: true
