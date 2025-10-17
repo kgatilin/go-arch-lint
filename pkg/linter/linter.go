@@ -72,12 +72,51 @@ func (ofna *outputFileNodeAdapter) GetDependencies() []output.Dependency {
 	return deps
 }
 
+// fileWithAPIAdapter adapts scanner.FileInfoWithAPI to output.FileWithAPI interface
+type fileWithAPIAdapter struct {
+	file *scanner.FileInfoWithAPI
+}
+
+func (fwa *fileWithAPIAdapter) GetRelPath() string {
+	return fwa.file.RelPath
+}
+
+func (fwa *fileWithAPIAdapter) GetPackage() string {
+	return fwa.file.Package
+}
+
+func (fwa *fileWithAPIAdapter) GetExportedDecls() []output.ExportedDecl {
+	decls := make([]output.ExportedDecl, len(fwa.file.ExportedDecls))
+	for i := range fwa.file.ExportedDecls {
+		decls[i] = &fwa.file.ExportedDecls[i] // scanner.ExportedDecl implements output.ExportedDecl
+	}
+	return decls
+}
+
 // Run executes the linter on the specified project path
 func Run(projectPath string, format string) (string, string, error) {
 	// Load configuration
 	cfg, err := config.Load(projectPath)
 	if err != nil {
 		return "", "", err
+	}
+
+	// Handle API format separately
+	if format == "api" {
+		s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths)
+		filesWithAPI, err := s.ScanWithAPI(cfg.ScanPaths)
+		if err != nil {
+			return "", "", err
+		}
+
+		// Convert to output.FileWithAPI interface
+		outFiles := make([]output.FileWithAPI, len(filesWithAPI))
+		for i := range filesWithAPI {
+			outFiles[i] = &fileWithAPIAdapter{file: &filesWithAPI[i]}
+		}
+
+		apiOutput := output.GenerateAPIMarkdown(outFiles)
+		return apiOutput, "", nil
 	}
 
 	// Scan files

@@ -16,23 +16,18 @@ The tool is structured around five core domain concerns, each isolated in its ow
 - Module information (from go.mod)
 - Scan paths and ignore patterns
 
-**Public Interface**:
-- `Load(projectPath) (*Config, error)` - loads configuration
-- `GetDirectoriesImport() map[string][]string` - returns import rules
-- `ShouldDetectUnused() bool` - returns unused package detection setting
+_See [public-api-generated.md](./public-api-generated.md) for the complete public interface._
 
 ### 2. File Scanner (`internal/scanner`)
-**Responsibility**: Discover Go source files and extract their import declarations.
+**Responsibility**: Discover Go source files and extract their import declarations and exported API.
 
 **Domain Concepts**:
 - File metadata (path, package name)
 - Import declarations
+- Exported API extraction (functions, types, constants, variables)
 - File filtering (test files, ignored paths)
 
-**Public Interface**:
-- `New(projectPath, module, ignorePaths) *Scanner` - creates scanner
-- `Scan(scanPaths) ([]FileInfo, error)` - scans and returns files
-- `FileInfo` type with methods: `GetRelPath()`, `GetPackage()`, `GetImports()`
+_See [public-api-generated.md](./public-api-generated.md) for the complete public interface._
 
 ### 3. Dependency Graph (`internal/graph`)
 **Responsibility**: Build a dependency graph from scanned files, classifying imports as local or external.
@@ -42,10 +37,7 @@ The tool is structured around five core domain concerns, each isolated in its ow
 - Local vs external imports
 - Import path classification
 
-**Public Interface**:
-- `Build(files []FileInfo, module) *Graph` - builds dependency graph
-- `IsStdLib(importPath) bool` - checks if import is stdlib
-- `FileNode` and `Dependency` types with accessor methods
+_See [public-api-generated.md](./public-api-generated.md) for the complete public interface._
 
 ### 4. Validator (`internal/validator`)
 **Responsibility**: Validate dependency graph against architectural rules.
@@ -55,22 +47,18 @@ The tool is structured around five core domain concerns, each isolated in its ow
 - Architectural rules enforcement
 - Violation reporting
 
-**Public Interface**:
-- `New(cfg Config, g Graph) *Validator` - creates validator
-- `Validate() []Violation` - checks rules and returns violations
-- `Violation` type with accessor methods
+_See [public-api-generated.md](./public-api-generated.md) for the complete public interface._
 
 ### 5. Output Formatter (`internal/output`)
-**Responsibility**: Format dependency graphs and violations for display.
+**Responsibility**: Format dependency graphs, public APIs, and violations for display.
 
 **Domain Concepts**:
 - Markdown formatting
 - Violation reporting format
 - Dependency visualization
+- Public API documentation generation
 
-**Public Interface**:
-- `GenerateMarkdown(g Graph) string` - generates dependency graph markdown
-- `FormatViolations(violations []Violation) string` - formats violation report
+_See [public-api-generated.md](./public-api-generated.md) for the complete public interface._
 
 ## Package Architecture
 
@@ -182,10 +170,10 @@ func (ga *graphAdapter) GetNodes() []validator.FileNode {
 
 Each `internal` package has exactly one responsibility:
 - `config` - configuration loading
-- `scanner` - file discovery
+- `scanner` - file discovery and API extraction
 - `graph` - dependency graph construction
 - `validator` - rule validation
-- `output` - formatting
+- `output` - formatting (dependencies, violations, public APIs)
 
 **Why**: Makes each package easy to understand, test, and modify independently.
 

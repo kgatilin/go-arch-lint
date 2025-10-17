@@ -24,6 +24,21 @@ type Graph interface {
 	GetNodes() []FileNode
 }
 
+// ExportedDecl represents an exported declaration for API documentation
+type ExportedDecl interface {
+	GetName() string
+	GetKind() string
+	GetSignature() string
+	GetProperties() []string
+}
+
+// FileWithAPI represents a file with exported API information
+type FileWithAPI interface {
+	GetRelPath() string
+	GetPackage() string
+	GetExportedDecls() []ExportedDecl
+}
+
 // Violation represents a validation violation
 type Violation interface {
 	GetType() string
@@ -117,6 +132,152 @@ func FormatViolations(violations []Violation) string {
 		sb.WriteString(fmt.Sprintf("  Rule: %s\n", v.GetRule()))
 		sb.WriteString(fmt.Sprintf("  Fix: %s\n", v.GetFix()))
 		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
+// GenerateAPIMarkdown creates a markdown representation of public APIs by package
+func GenerateAPIMarkdown(files []FileWithAPI) string {
+	var sb strings.Builder
+
+	sb.WriteString("# Public API\n\n")
+
+	// Group files by package
+	packageFiles := make(map[string][]FileWithAPI)
+	for _, file := range files {
+		pkg := file.GetPackage()
+		packageFiles[pkg] = append(packageFiles[pkg], file)
+	}
+
+	// Sort packages for consistent output
+	packages := make([]string, 0, len(packageFiles))
+	for pkg := range packageFiles {
+		packages = append(packages, pkg)
+	}
+	sort.Strings(packages)
+
+	// Generate API documentation for each package
+	for _, pkg := range packages {
+		files := packageFiles[pkg]
+
+		// Collect all exported declarations for this package
+		var allDecls []ExportedDecl
+		for _, file := range files {
+			allDecls = append(allDecls, file.GetExportedDecls()...)
+		}
+
+		// Skip packages with no exported declarations
+		if len(allDecls) == 0 {
+			continue
+		}
+
+		sb.WriteString(fmt.Sprintf("## %s\n\n", pkg))
+
+		// Sort declarations by name
+		sort.Slice(allDecls, func(i, j int) bool {
+			return allDecls[i].GetName() < allDecls[j].GetName()
+		})
+
+		// Group declarations by kind
+		typeDecls := []ExportedDecl{}
+		funcDecls := []ExportedDecl{}
+		constDecls := []ExportedDecl{}
+		varDecls := []ExportedDecl{}
+
+		for _, decl := range allDecls {
+			switch decl.GetKind() {
+			case "func":
+				funcDecls = append(funcDecls, decl)
+			case "type":
+				typeDecls = append(typeDecls, decl)
+			case "const":
+				constDecls = append(constDecls, decl)
+			case "var":
+				varDecls = append(varDecls, decl)
+			}
+		}
+
+		// Group methods by type
+		methodsByType := make(map[string][]ExportedDecl)
+		standaloneFuncs := []ExportedDecl{}
+
+		for _, decl := range funcDecls {
+			sig := decl.GetSignature()
+			// Check if this is a method (starts with receiver like (*Type) or (Type))
+			if strings.HasPrefix(sig, "(") {
+				// Extract type name from receiver
+				endIdx := strings.Index(sig, ")")
+				if endIdx > 0 {
+					receiver := sig[1:endIdx]
+					// Remove pointer if present
+					typeName := strings.TrimPrefix(receiver, "*")
+					methodsByType[typeName] = append(methodsByType[typeName], decl)
+					continue
+				}
+			}
+			standaloneFuncs = append(standaloneFuncs, decl)
+		}
+
+		// Output Types section
+		if len(typeDecls) > 0 {
+			sb.WriteString("### Types\n\n")
+			for _, typeDecl := range typeDecls {
+				properties := typeDecl.GetProperties()
+				methods := methodsByType[typeDecl.GetName()]
+
+				// Format type name (bold if has methods, italic if no methods)
+				if len(methods) > 0 {
+					sb.WriteString(fmt.Sprintf("- **%s**\n", typeDecl.GetName()))
+				} else {
+					sb.WriteString(fmt.Sprintf("- *%s*\n", typeDecl.GetName()))
+				}
+
+				// Show properties if any
+				if len(properties) > 0 {
+					sb.WriteString("  - Properties:\n")
+					for _, prop := range properties {
+						sb.WriteString(fmt.Sprintf("    - %s\n", prop))
+					}
+				}
+
+				// Show methods if any
+				if len(methods) > 0 {
+					sb.WriteString("  - Methods:\n")
+					for _, method := range methods {
+						sb.WriteString(fmt.Sprintf("    - %s\n", method.GetSignature()))
+					}
+				}
+			}
+			sb.WriteString("\n")
+		}
+
+		// Package functions section
+		if len(standaloneFuncs) > 0 {
+			sb.WriteString("### Package Functions\n\n")
+			for _, decl := range standaloneFuncs {
+				sb.WriteString(fmt.Sprintf("- %s\n", decl.GetSignature()))
+			}
+			sb.WriteString("\n")
+		}
+
+		// Constants section
+		if len(constDecls) > 0 {
+			sb.WriteString("### Constants\n\n")
+			for _, decl := range constDecls {
+				sb.WriteString(fmt.Sprintf("- %s\n", decl.GetName()))
+			}
+			sb.WriteString("\n")
+		}
+
+		// Variables section
+		if len(varDecls) > 0 {
+			sb.WriteString("### Variables\n\n")
+			for _, decl := range varDecls {
+				sb.WriteString(fmt.Sprintf("- %s\n", decl.GetName()))
+			}
+			sb.WriteString("\n")
+		}
 	}
 
 	return sb.String()
