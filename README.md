@@ -26,28 +26,31 @@ go-arch-lint [path]
 
 ### Flags
 
-- `--format string` - Output format: `markdown` for dependency graph (default), `api` for public API documentation
-- `--detailed` - Show method-level dependencies (which specific functions/types are used from each package)
-- `--strict` - Fail on any violations (default: true)
-- `--exit-zero` - Don't fail on violations, report only
+- `-format string` - Output format: `markdown` for dependency graph, `api` for public API documentation (default: none, only show violations)
+- `-detailed` - Show method-level dependencies (which specific functions/types are used from each package)
+- `-strict` - Fail on any violations (default: true)
+- `-exit-zero` - Don't fail on violations, report only
 
 ### Examples
 
 ```bash
-# Scan current directory
+# Scan current directory (shows only violations if any)
 go-arch-lint .
 
-# Scan with detailed method-level dependencies
-go-arch-lint -detailed .
+# Show dependency graph in markdown format
+go-arch-lint -format=markdown .
+
+# Show detailed method-level dependencies
+go-arch-lint -detailed -format=markdown .
 
 # Generate public API documentation
-go-arch-lint . --format api
+go-arch-lint -format=api .
 
 # Scan specific directory
 go-arch-lint /path/to/project
 
 # Report violations but don't fail
-go-arch-lint --exit-zero .
+go-arch-lint -exit-zero .
 ```
 
 ## Configuration
@@ -111,12 +114,16 @@ The tool enforces the following dependency rules:
 
 ## Output
 
-The tool generates two outputs:
+By default, the tool runs silently and only reports violations if found:
 
-1. **Dependency Graph** (stdout): Markdown format showing all file-level dependencies
-   - Standard mode: Shows which packages each file imports
-   - Detailed mode (`-detailed`): Shows which specific methods/types are used from each package
-2. **Violation Report** (stderr): List of violations with explanations and fixes
+1. **Violation Report** (stderr): List of violations with explanations and fixes (when violations exist)
+
+When using the `-format` flag, the tool also generates:
+
+2. **Dependency Graph** (stdout): Markdown format showing all file-level dependencies
+   - Standard mode (`-format markdown`): Shows which packages each file imports
+   - Detailed mode (`-detailed -format markdown`): Shows which specific methods/types are used from each package
+   - API mode (`-format api`): Generates public API documentation
 
 ### Example Dependency Graph (Detailed Mode)
 
@@ -156,7 +163,7 @@ DEPENDENCY VIOLATIONS DETECTED
 ## Exit Codes
 
 - `0` - No violations detected
-- `1` - Violations detected (unless `--exit-zero` is specified)
+- `1` - Violations detected (unless `-exit-zero` is specified)
 - `2` - Configuration or runtime error
 
 ## Use in CI

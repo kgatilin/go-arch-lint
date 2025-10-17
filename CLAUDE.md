@@ -28,14 +28,14 @@ go test ./internal/validator -run TestValidate_PkgToPkgViolation
 ./go-arch-lint .
 
 # Run with different output formats
-./go-arch-lint . --format markdown   # Dependency graph (default)
-./go-arch-lint -detailed .           # Detailed method-level dependencies
-./go-arch-lint . --format api        # Public API documentation
-./go-arch-lint . --exit-zero         # Don't fail on violations
+./go-arch-lint -format=markdown .    # Dependency graph
+./go-arch-lint -detailed -format=markdown .  # Detailed method-level dependencies
+./go-arch-lint -format=api .         # Public API documentation
+./go-arch-lint -exit-zero .          # Don't fail on violations
 
 # Update generated documentation
-./go-arch-lint -detailed . --format markdown > docs/arch-generated.md 2>&1
-./go-arch-lint . --format api > docs/public-api-generated.md 2>&1
+./go-arch-lint -detailed -format=markdown . > docs/arch-generated.md 2>&1
+./go-arch-lint -format=api . > docs/public-api-generated.md 2>&1
 ```
 
 ## Critical Architecture Constraints
@@ -142,7 +142,7 @@ Each internal package is a **completely isolated primitive** with a single respo
 
 **cmd/go-arch-lint/main.go** is minimal:
 - Only imports `pkg/linter`
-- Parses CLI flags (`--format`, `--detailed`, `--strict`, `--exit-zero`)
+- Parses CLI flags (`-format`, `-detailed`, `-strict`, `-exit-zero`)
 - Calls `linter.Run()`
 - Handles exit codes (0 = clean, 1 = violations, 2 = error)
 
@@ -241,10 +241,10 @@ The tool validates 5 types of architectural violations:
 4. **Update generated documentation** (if changes affect architecture, public API, CLI flags, or usage):
    ```bash
    # Update dependency graph with method-level details
-   ./go-arch-lint -detailed . --format markdown > docs/arch-generated.md 2>&1
+   ./go-arch-lint -detailed -format=markdown . > docs/arch-generated.md 2>&1
 
    # Update public API documentation
-   ./go-arch-lint . --format api > docs/public-api-generated.md 2>&1
+   ./go-arch-lint -format=api . > docs/public-api-generated.md 2>&1
    ```
 5. **Update README.md** (if changes affect usage, flags, configuration, or examples):
    - Update flags section if new CLI options were added
