@@ -31,8 +31,16 @@ type PresetStructure struct {
 }
 
 type PresetRules struct {
-	DirectoriesImport map[string][]string `yaml:"directories_import"`
-	DetectUnused      bool                `yaml:"detect_unused"`
+	DirectoriesImport     map[string][]string       `yaml:"directories_import"`
+	DetectUnused          bool                      `yaml:"detect_unused"`
+	SharedExternalImports PresetSharedExternalImports `yaml:"shared_external_imports"`
+}
+
+type PresetSharedExternalImports struct {
+	Detect            bool     `yaml:"detect"`
+	Mode              string   `yaml:"mode"`
+	Exclusions        []string `yaml:"exclusions,omitempty"`
+	ExclusionPatterns []string `yaml:"exclusion_patterns,omitempty"`
 }
 
 // AvailablePresets returns all available presets
@@ -92,6 +100,20 @@ Example refactoring:
 						"cmd":             {"internal/app", "internal/infra"},
 					},
 					DetectUnused: true,
+					SharedExternalImports: PresetSharedExternalImports{
+						Detect: true,
+						Mode:   "warn",
+						Exclusions: []string{
+							"fmt",
+							"strings",
+							"errors",
+							"time",
+							"context",
+						},
+						ExclusionPatterns: []string{
+							"encoding/*",
+						},
+					},
 				},
 			},
 		},
@@ -148,6 +170,20 @@ Example refactoring:
 						"internal": {},
 					},
 					DetectUnused: true,
+					SharedExternalImports: PresetSharedExternalImports{
+						Detect: true,
+						Mode:   "warn",
+						Exclusions: []string{
+							"fmt",
+							"strings",
+							"errors",
+							"time",
+							"context",
+						},
+						ExclusionPatterns: []string{
+							"encoding/*",
+						},
+					},
 				},
 			},
 		},
@@ -212,6 +248,20 @@ Example refactoring:
 						"cmd":               {"internal/ports", "internal/adapters"},
 					},
 					DetectUnused: true,
+					SharedExternalImports: PresetSharedExternalImports{
+						Detect: true,
+						Mode:   "warn",
+						Exclusions: []string{
+							"fmt",
+							"strings",
+							"errors",
+							"time",
+							"context",
+						},
+						ExclusionPatterns: []string{
+							"encoding/*",
+						},
+					},
 				},
 			},
 		},

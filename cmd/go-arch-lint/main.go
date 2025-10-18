@@ -45,7 +45,7 @@ func run() int {
 	}
 
 	// Run linter
-	graphOutput, violationsOutput, err := linter.Run(absPath, *formatFlag, *detailedFlag)
+	graphOutput, violationsOutput, shouldFail, err := linter.Run(absPath, *formatFlag, *detailedFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 2
@@ -64,7 +64,7 @@ func run() int {
 		if *exitZeroFlag {
 			return 0
 		}
-		if *strictFlag {
+		if shouldFail && *strictFlag {
 			return 1
 		}
 	}
@@ -172,7 +172,7 @@ func runDocs() int {
 
 	// Run linter with detailed full documentation
 	fmt.Println("Generating comprehensive documentation...")
-	graphOutput, violationsOutput, err := linter.Run(absPath, "full", true)
+	graphOutput, violationsOutput, shouldFail, err := linter.Run(absPath, "full", true)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 2
@@ -201,7 +201,9 @@ func runDocs() int {
 	// Report violations if any
 	if violationsOutput != "" {
 		fmt.Fprintln(os.Stderr, "\n"+violationsOutput)
-		return 1
+		if shouldFail {
+			return 1
+		}
 	}
 
 	return 0

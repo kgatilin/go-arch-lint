@@ -98,11 +98,11 @@ func (fwa *fileWithAPIAdapter) GetExportedDecls() []output.ExportedDecl {
 }
 
 // Run executes the linter on the specified project path
-func Run(projectPath string, format string, detailed bool) (string, string, error) {
+func Run(projectPath string, format string, detailed bool) (string, string, bool, error) {
 	// Load configuration
 	cfg, err := config.Load(projectPath)
 	if err != nil {
-		return "", "", err
+		return "", "", false, err
 	}
 
 	// Handle API format separately
@@ -110,7 +110,7 @@ func Run(projectPath string, format string, detailed bool) (string, string, erro
 		s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths)
 		filesWithAPI, err := s.ScanWithAPI(cfg.ScanPaths)
 		if err != nil {
-			return "", "", err
+			return "", "", false, err
 		}
 
 		// Convert to output.FileWithAPI interface
@@ -120,7 +120,7 @@ func Run(projectPath string, format string, detailed bool) (string, string, erro
 		}
 
 		apiOutput := output.GenerateAPIMarkdown(outFiles)
-		return apiOutput, "", nil
+		return apiOutput, "", false, nil
 	}
 
 	// Scan files
@@ -132,7 +132,7 @@ func Run(projectPath string, format string, detailed bool) (string, string, erro
 		// Scan with detailed symbol tracking
 		detailedFiles, err := s.ScanDetailed(cfg.ScanPaths)
 		if err != nil {
-			return "", "", err
+			return "", "", false, err
 		}
 
 		// Convert to graph.FileInfo interface
@@ -157,7 +157,7 @@ func Run(projectPath string, format string, detailed bool) (string, string, erro
 		// Standard scan
 		files, err := s.Scan(cfg.ScanPaths)
 		if err != nil {
-			return "", "", err
+			return "", "", false, err
 		}
 
 		// Convert scanner.FileInfo to graph.FileInfo interface
@@ -209,7 +209,10 @@ func Run(projectPath string, format string, detailed bool) (string, string, erro
 		violationsOutput = output.FormatViolations(outViolations)
 	}
 
-	return graphOutput, violationsOutput, nil
+	// Determine if violations should cause build failure (respect warn mode)
+	shouldFail := shouldFailBuild(violations, cfg)
+
+	return graphOutput, violationsOutput, shouldFail, nil
 }
 
 // generateFullDocumentation creates comprehensive documentation combining structure, rules, dependencies, and API
@@ -265,6 +268,29 @@ func generateFullDocumentation(projectPath string, cfg *config.Config, g *graph.
 	}
 
 	return output.GenerateFullDocumentation(fullDoc)
+}
+
+// shouldFailBuild determines if violations should cause build failure
+func shouldFailBuild(violations []validator.Violation, cfg *config.Config) bool {
+	if len(violations) == 0 {
+		return false
+	}
+
+	sharedImportsMode := cfg.GetSharedExternalImportsMode()
+
+	for _, viol := range violations {
+		// If any violation is NOT a shared external import, fail
+		if viol.Type != validator.ViolationSharedExternalImport {
+			return true
+		}
+		// If shared external import with mode "error", fail
+		if viol.Type == validator.ViolationSharedExternalImport && sharedImportsMode == "error" {
+			return true
+		}
+	}
+
+	// Only shared external imports in warn mode (or no violations)
+	return false
 }
 
 const defaultConfig = `# go-arch-lint configuration
@@ -424,7 +450,7 @@ func Init(projectPath, preset string, createDirs bool) error {
 	}
 
 	// Generate dependency graph documentation
-	graphOutput, _, err := Run(projectPath, "markdown", true)
+	graphOutput, _, _, err := Run(projectPath, "markdown", true)
 	if err != nil {
 		return fmt.Errorf("failed to generate dependency graph: %w", err)
 	}
@@ -435,7 +461,7 @@ func Init(projectPath, preset string, createDirs bool) error {
 	fmt.Println("✓ Created docs/arch-generated.md")
 
 	// Generate public API documentation
-	apiOutput, _, err := Run(projectPath, "api", false)
+	apiOutput, _, _, err := Run(projectPath, "api", false)
 	if err != nil {
 		return fmt.Errorf("failed to generate API documentation: %w", err)
 	}

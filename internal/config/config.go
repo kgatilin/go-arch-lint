@@ -30,9 +30,17 @@ type Structure struct {
 	AllowOtherDirectories  bool              `yaml:"allow_other_directories"`
 }
 
+type SharedExternalImports struct {
+	Mode              string   `yaml:"mode"`                // "warn" or "error"
+	Exclusions        []string `yaml:"exclusions"`          // Exact package names
+	ExclusionPatterns []string `yaml:"exclusion_patterns"`  // Glob patterns
+	Detect            bool     `yaml:"detect"`              // Enable/disable detection
+}
+
 type Rules struct {
-	DirectoriesImport map[string][]string `yaml:"directories_import"`
-	DetectUnused      bool                `yaml:"detect_unused"`
+	DirectoriesImport     map[string][]string   `yaml:"directories_import"`
+	DetectUnused          bool                  `yaml:"detect_unused"`
+	SharedExternalImports SharedExternalImports `yaml:"shared_external_imports,omitempty"`
 }
 
 // GetDirectoriesImport implements validator.Config interface
@@ -63,6 +71,29 @@ func (c *Config) GetPresetUsed() string {
 // GetErrorPrompt returns the architectural context for error messages
 func (c *Config) GetErrorPrompt() ErrorPrompt {
 	return c.ErrorPrompt
+}
+
+// ShouldDetectSharedExternalImports implements validator.Config interface
+func (c *Config) ShouldDetectSharedExternalImports() bool {
+	return c.Rules.SharedExternalImports.Detect
+}
+
+// GetSharedExternalImportsMode implements validator.Config interface
+func (c *Config) GetSharedExternalImportsMode() string {
+	if c.Rules.SharedExternalImports.Mode == "" {
+		return "warn" // Default mode
+	}
+	return c.Rules.SharedExternalImports.Mode
+}
+
+// GetSharedExternalImportsExclusions implements validator.Config interface
+func (c *Config) GetSharedExternalImportsExclusions() []string {
+	return c.Rules.SharedExternalImports.Exclusions
+}
+
+// GetSharedExternalImportsExclusionPatterns implements validator.Config interface
+func (c *Config) GetSharedExternalImportsExclusionPatterns() []string {
+	return c.Rules.SharedExternalImports.ExclusionPatterns
 }
 
 // Load reads and parses the .goarchlint configuration file

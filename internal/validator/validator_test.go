@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/kgatilin/go-arch-lint/internal/config"
@@ -549,5 +550,200 @@ func TestValidate_ForbiddenImportNotInAllowedList(t *testing.T) {
 
 	if !found {
 		t.Error("expected ViolationForbidden for cmd importing internal/forbidden")
+	}
+}
+
+func TestDetectSharedExternalImports_MultipleLayersImportSamePackage(t *testing.T) {
+	// Create config with shared_external_imports enabled
+	cfg := &config.Config{
+		Module: "example.com/test",
+		Rules: config.Rules{
+			DirectoriesImport: map[string][]string{
+				"cmd":      {"pkg"},
+				"internal": {},
+			},
+			SharedExternalImports: config.SharedExternalImports{
+				Mode:   "error",
+				Detect: true,
+			},
+		},
+	}
+
+	// Create graph with cmd and internal both importing github.com/pkg/errors (external non-stdlib)
+	files := []scanner.FileInfo{
+		{
+			Path:    "/project/cmd/main.go",
+			RelPath: "cmd/main.go",
+			Package: "main",
+			Imports: []string{"github.com/pkg/errors", "fmt"},
+		},
+		{
+			Path:    "/project/internal/repo.go",
+			RelPath: "internal/repo.go",
+			Package: "repo",
+			Imports: []string{"github.com/pkg/errors"},
+		},
+	}
+
+	module := "example.com/test"
+	g := graph.Build(toGraphFiles(files), module)
+
+	v := New(cfg, &testGraphAdapter{g: g})
+	violations := v.Validate()
+
+	// Should have exactly 1 violation for github.com/pkg/errors
+	found := false
+	for _, viol := range violations {
+		if viol.Type == ViolationSharedExternalImport && strings.Contains(viol.Issue, "github.com/pkg/errors") {
+			found = true
+			// Verify violation details
+			if !strings.Contains(viol.Issue, "2 layers") {
+				t.Errorf("Expected '2 layers' in issue, got: %s", viol.Issue)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Expected ViolationSharedExternalImport for github.com/pkg/errors")
+	}
+}
+
+func TestDetectSharedExternalImports_ExactExclusion(t *testing.T) {
+	// Create config with github.com/pkg/errors in exclusions
+	cfg := &config.Config{
+		Module: "example.com/test",
+		Rules: config.Rules{
+			DirectoriesImport: map[string][]string{
+				"cmd":      {"pkg"},
+				"internal": {},
+			},
+			SharedExternalImports: config.SharedExternalImports{
+				Detect:     true,
+				Mode:       "error",
+				Exclusions: []string{"fmt", "github.com/pkg/errors"},
+			},
+		},
+	}
+
+	// Create graph with cmd and internal both importing github.com/pkg/errors (excluded)
+	files := []scanner.FileInfo{
+		{
+			Path:    "/project/cmd/main.go",
+			RelPath: "cmd/main.go",
+			Package: "main",
+			Imports: []string{"github.com/pkg/errors"},
+		},
+		{
+			Path:    "/project/internal/repo.go",
+			RelPath: "internal/repo.go",
+			Package: "repo",
+			Imports: []string{"github.com/pkg/errors"},
+		},
+	}
+
+	module := "example.com/test"
+	g := graph.Build(toGraphFiles(files), module)
+
+	v := New(cfg, &testGraphAdapter{g: g})
+	violations := v.Validate()
+
+	// Should NOT have violation for github.com/pkg/errors (it's excluded)
+	for _, viol := range violations {
+		if viol.Type == ViolationSharedExternalImport && strings.Contains(viol.Issue, "github.com/pkg/errors") {
+			t.Error("Expected no violation for github.com/pkg/errors (excluded)")
+		}
+	}
+}
+
+func TestDetectSharedExternalImports_GlobExclusion(t *testing.T) {
+	// Create config with encoding/* pattern
+	cfg := &config.Config{
+		Module: "example.com/test",
+		Rules: config.Rules{
+			DirectoriesImport: map[string][]string{
+				"cmd":      {"pkg"},
+				"internal": {},
+			},
+			SharedExternalImports: config.SharedExternalImports{
+				Detect:            true,
+				Mode:              "error",
+				ExclusionPatterns: []string{"encoding/*"},
+			},
+		},
+	}
+
+	// Create graph with cmd and internal both importing encoding/json (should be excluded)
+	files := []scanner.FileInfo{
+		{
+			Path:    "/project/cmd/main.go",
+			RelPath: "cmd/main.go",
+			Package: "main",
+			Imports: []string{"encoding/json"},
+		},
+		{
+			Path:    "/project/internal/repo.go",
+			RelPath: "internal/repo.go",
+			Package: "repo",
+			Imports: []string{"encoding/json"},
+		},
+	}
+
+	module := "example.com/test"
+	g := graph.Build(toGraphFiles(files), module)
+
+	v := New(cfg, &testGraphAdapter{g: g})
+	violations := v.Validate()
+
+	// Should NOT have violation for encoding/json (matches pattern)
+	for _, viol := range violations {
+		if viol.Type == ViolationSharedExternalImport && strings.Contains(viol.Issue, "encoding/json") {
+			t.Error("Expected no violation for encoding/json (matches encoding/* pattern)")
+		}
+	}
+}
+
+func TestDetectSharedExternalImports_SingleLayerNoViolation(t *testing.T) {
+	// Create config
+	cfg := &config.Config{
+		Module: "example.com/test",
+		Rules: config.Rules{
+			DirectoriesImport: map[string][]string{
+				"cmd":      {"pkg"},
+				"internal": {},
+			},
+			SharedExternalImports: config.SharedExternalImports{
+				Detect: true,
+				Mode:   "error",
+			},
+		},
+	}
+
+	// Create graph with multiple files in same layer (internal) importing same package
+	files := []scanner.FileInfo{
+		{
+			Path:    "/project/internal/repo.go",
+			RelPath: "internal/repo.go",
+			Package: "repo",
+			Imports: []string{"github.com/pkg/errors"},
+		},
+		{
+			Path:    "/project/internal/store.go",
+			RelPath: "internal/store.go",
+			Package: "store",
+			Imports: []string{"github.com/pkg/errors"},
+		},
+	}
+
+	module := "example.com/test"
+	g := graph.Build(toGraphFiles(files), module)
+
+	v := New(cfg, &testGraphAdapter{g: g})
+	violations := v.Validate()
+
+	// Should NOT have violation (same layer is OK)
+	for _, viol := range violations {
+		if viol.Type == ViolationSharedExternalImport {
+			t.Errorf("Expected no shared external import violations, got: %v", viol)
+		}
 	}
 }
