@@ -17,6 +17,10 @@ type Config interface {
 	GetSharedExternalImportsMode() string
 	GetSharedExternalImportsExclusions() []string
 	GetSharedExternalImportsExclusionPatterns() []string
+	ShouldLintTestFiles() bool
+	GetTestExemptImports() []string
+	GetTestFileLocation() string
+	ShouldRequireBlackboxTests() bool
 }
 
 // Dependency interface for accessing dependency information
@@ -29,6 +33,7 @@ type Dependency interface {
 // FileNode interface for accessing file node information
 type FileNode interface {
 	GetRelPath() string
+	GetPackage() string
 	GetDependencies() []Dependency
 }
 
@@ -50,6 +55,8 @@ const (
 	ViolationEmptyDirectory      ViolationType = "Empty Required Directory"
 	ViolationUnusedDirectory     ViolationType = "Unused Required Directory"
 	ViolationSharedExternalImport ViolationType = "Shared External Import"
+	ViolationTestFileLocation     ViolationType = "Test File Wrong Location"
+	ViolationWhiteboxTest         ViolationType = "Whitebox Test"
 )
 
 type Violation struct {
@@ -135,6 +142,16 @@ func (v *Validator) Validate() []Violation {
 	// Check for shared external imports
 	if v.cfg.ShouldDetectSharedExternalImports() {
 		violations = append(violations, v.detectSharedExternalImports()...)
+	}
+
+	// Check test file locations
+	if v.cfg.ShouldLintTestFiles() && v.cfg.GetTestFileLocation() != "any" {
+		violations = append(violations, v.validateTestFileLocations()...)
+	}
+
+	// Check for whitebox tests (require blackbox tests)
+	if v.cfg.ShouldRequireBlackboxTests() {
+		violations = append(violations, v.validateBlackboxTests()...)
 	}
 
 	return violations
@@ -332,10 +349,19 @@ func (v *Validator) validateFile(node FileNode) []Violation {
 	fileDir := filepath.Dir(node.GetRelPath())
 	fileDir = filepath.ToSlash(fileDir)
 
+	// Check if this is a black-box test file
+	isBlackBoxTest := v.isBlackBoxTest(node)
+
 	for _, dep := range node.GetDependencies() {
 		// Skip standard library and external dependencies for most rules
 		if !dep.IsLocalDep() {
 			continue
+		}
+
+		// Exempt parent package imports for black-box tests
+		// Black-box tests are allowed to import their parent package without triggering violations
+		if isBlackBoxTest && v.isParentPackageImport(fileDir, dep.GetLocalPath()) {
+			continue // Skip all validation for parent package import
 		}
 
 		// Determine the top-level directory (cmd, pkg, internal)
@@ -701,4 +727,129 @@ func (v *Validator) isExcludedExternalPackage(pkg string) bool {
 	}
 
 	return false
+}
+
+// isBlackBoxTest checks if a file is a black-box test
+// Black-box tests are test files (ending with _test.go) whose package name ends with _test
+// e.g., file: internal/app/foo_test.go, package: app_test
+func (v *Validator) isBlackBoxTest(node FileNode) bool {
+	relPath := node.GetRelPath()
+	packageName := node.GetPackage()
+
+	// Must be a test file
+	if !strings.HasSuffix(relPath, "_test.go") {
+		return false
+	}
+
+	// Package name must end with _test
+	if !strings.HasSuffix(packageName, "_test") {
+		return false
+	}
+
+	return true
+}
+
+// isParentPackageImport checks if an import is the parent package of a test file
+// e.g., fileDir = "internal/app", importPath = "internal/app" -> true
+func (v *Validator) isParentPackageImport(fileDir string, importPath string) bool {
+	// The import path should match the file's directory
+	return fileDir == importPath
+}
+
+// validateTestFileLocations checks that test files are in the correct location based on policy
+func (v *Validator) validateTestFileLocations() []Violation {
+	var violations []Violation
+
+	policy := v.cfg.GetTestFileLocation()
+
+	for _, node := range v.graph.GetNodes() {
+		relPath := node.GetRelPath()
+
+		// Only check test files
+		if !strings.HasSuffix(relPath, "_test.go") {
+			continue
+		}
+
+		switch policy {
+		case "colocated":
+			// Test files should be next to the code they're testing (not in a separate tests/ directory)
+			if strings.HasPrefix(relPath, "tests/") || strings.Contains(relPath, "/tests/") {
+				violations = append(violations, Violation{
+					Type:  ViolationTestFileLocation,
+					File:  relPath,
+					Issue: fmt.Sprintf("Test file is in separate tests/ directory"),
+					Rule:  "Test files should be colocated with the code they test (location: colocated)",
+					Fix:   fmt.Sprintf("Move test file to the same directory as the code it tests"),
+				})
+			}
+
+		case "separate":
+			// Test files should be in a tests/ directory
+			if !strings.HasPrefix(relPath, "tests/") && !strings.Contains(relPath, "/tests/") {
+				violations = append(violations, Violation{
+					Type:  ViolationTestFileLocation,
+					File:  relPath,
+					Issue: fmt.Sprintf("Test file is colocated with code instead of in tests/ directory"),
+					Rule:  "Test files should be in a separate tests/ directory (location: separate)",
+					Fix:   fmt.Sprintf("Move test file to tests/ directory mirroring the source structure"),
+				})
+			}
+		}
+	}
+
+	return violations
+}
+
+// validateBlackboxTests checks that all test files use blackbox testing (package name with _test suffix)
+func (v *Validator) validateBlackboxTests() []Violation {
+	var violations []Violation
+
+	for _, node := range v.graph.GetNodes() {
+		relPath := node.GetRelPath()
+		packageName := node.GetPackage()
+
+		// Only check test files
+		if !strings.HasSuffix(relPath, "_test.go") {
+			continue
+		}
+
+		// Check if this is a whitebox test (package without _test suffix)
+		if !strings.HasSuffix(packageName, "_test") {
+			// Determine the expected package name
+			fileDir := filepath.Dir(relPath)
+			fileDir = filepath.ToSlash(fileDir)
+
+			// Get the base package name from the directory
+			parts := strings.Split(fileDir, "/")
+			basePkgName := parts[len(parts)-1]
+			if basePkgName == "." {
+				basePkgName = "main"
+			}
+			expectedPkg := basePkgName + "_test"
+
+			violations = append(violations, Violation{
+				Type:  ViolationWhiteboxTest,
+				File:  relPath,
+				Line:  1, // Package declaration is typically on line 1
+				Issue: fmt.Sprintf("Test file uses whitebox testing (package %s instead of %s)", packageName, expectedPkg),
+				Rule: `Blackbox testing is enforced to ensure tests validate the public API, not internal implementation.
+
+WHY THIS MATTERS:
+• Tests should verify behavior through the public interface, making them resilient to internal refactoring
+• If you can't test through the public API, it may indicate design issues with your component's interface
+• Blackbox tests encourage better API design and reduce coupling between tests and implementation
+• When internals change, blackbox tests remain valid as long as the public contract is maintained
+
+This is a Go best practice: the standard library and most Go projects use blackbox tests (package foo_test) for package-level testing.`,
+				Fix: fmt.Sprintf(`Change package declaration from 'package %s' to 'package %s'
+
+After changing to blackbox testing:
+1. Import your package: import "your-module/%s"
+2. Test only through exported (capitalized) functions, types, and methods
+3. If you can't test adequately through the public API, consider whether your API design needs improvement`, packageName, expectedPkg, filepath.Dir(relPath)),
+			})
+		}
+	}
+
+	return violations
 }

@@ -31,9 +31,17 @@ type PresetStructure struct {
 }
 
 type PresetRules struct {
-	DirectoriesImport     map[string][]string       `yaml:"directories_import"`
-	DetectUnused          bool                      `yaml:"detect_unused"`
+	DirectoriesImport     map[string][]string         `yaml:"directories_import"`
+	DetectUnused          bool                        `yaml:"detect_unused"`
 	SharedExternalImports PresetSharedExternalImports `yaml:"shared_external_imports"`
+	TestFiles             PresetTestFiles             `yaml:"test_files"`
+}
+
+type PresetTestFiles struct {
+	Lint            bool     `yaml:"lint"`
+	ExemptImports   []string `yaml:"exempt_imports,omitempty"`
+	Location        string   `yaml:"location,omitempty"`
+	RequireBlackbox bool     `yaml:"require_blackbox"`
 }
 
 type PresetSharedExternalImports struct {
@@ -114,6 +122,17 @@ Example refactoring:
 							"encoding/*",
 						},
 					},
+					TestFiles: PresetTestFiles{
+						Lint:            true,
+						Location:        "colocated",
+						RequireBlackbox: true,
+						ExemptImports: []string{
+							"testing",
+							"github.com/stretchr/testify/assert",
+							"github.com/stretchr/testify/require",
+							"github.com/stretchr/testify/mock",
+						},
+					},
 				},
 			},
 		},
@@ -182,6 +201,17 @@ Example refactoring:
 						},
 						ExclusionPatterns: []string{
 							"encoding/*",
+						},
+					},
+					TestFiles: PresetTestFiles{
+						Lint:            true,
+						Location:        "colocated",
+						RequireBlackbox: true,
+						ExemptImports: []string{
+							"testing",
+							"github.com/stretchr/testify/assert",
+							"github.com/stretchr/testify/require",
+							"github.com/stretchr/testify/mock",
 						},
 					},
 				},
@@ -260,6 +290,17 @@ Example refactoring:
 						},
 						ExclusionPatterns: []string{
 							"encoding/*",
+						},
+					},
+					TestFiles: PresetTestFiles{
+						Lint:            true,
+						Location:        "colocated",
+						RequireBlackbox: true,
+						ExemptImports: []string{
+							"testing",
+							"github.com/stretchr/testify/assert",
+							"github.com/stretchr/testify/require",
+							"github.com/stretchr/testify/mock",
 						},
 					},
 				},

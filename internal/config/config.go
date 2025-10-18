@@ -41,6 +41,14 @@ type Rules struct {
 	DirectoriesImport     map[string][]string   `yaml:"directories_import"`
 	DetectUnused          bool                  `yaml:"detect_unused"`
 	SharedExternalImports SharedExternalImports `yaml:"shared_external_imports,omitempty"`
+	TestFiles             TestFiles             `yaml:"test_files,omitempty"`
+}
+
+type TestFiles struct {
+	Lint            bool     `yaml:"lint"`
+	ExemptImports   []string `yaml:"exempt_imports,omitempty"`
+	Location        string   `yaml:"location,omitempty"`    // "colocated" (default), "separate", "any"
+	RequireBlackbox bool     `yaml:"require_blackbox"`      // Require blackbox tests (package foo_test)
 }
 
 // GetDirectoriesImport implements validator.Config interface
@@ -94,6 +102,29 @@ func (c *Config) GetSharedExternalImportsExclusions() []string {
 // GetSharedExternalImportsExclusionPatterns implements validator.Config interface
 func (c *Config) GetSharedExternalImportsExclusionPatterns() []string {
 	return c.Rules.SharedExternalImports.ExclusionPatterns
+}
+
+// ShouldLintTestFiles implements validator.Config interface
+func (c *Config) ShouldLintTestFiles() bool {
+	return c.Rules.TestFiles.Lint
+}
+
+// GetTestExemptImports implements validator.Config interface
+func (c *Config) GetTestExemptImports() []string {
+	return c.Rules.TestFiles.ExemptImports
+}
+
+// GetTestFileLocation implements validator.Config interface
+func (c *Config) GetTestFileLocation() string {
+	if c.Rules.TestFiles.Location == "" {
+		return "colocated" // Default: tests next to code
+	}
+	return c.Rules.TestFiles.Location
+}
+
+// ShouldRequireBlackboxTests implements validator.Config interface
+func (c *Config) ShouldRequireBlackboxTests() bool {
+	return c.Rules.TestFiles.RequireBlackbox
 }
 
 // Load reads and parses the .goarchlint configuration file
@@ -160,6 +191,9 @@ func defaultConfig(projectPath string) (*Config, error) {
 				"internal": {"internal"},
 			},
 			DetectUnused: true,
+			TestFiles: TestFiles{
+				RequireBlackbox: true, // Default to requiring blackbox tests
+			},
 		},
 	}, nil
 }

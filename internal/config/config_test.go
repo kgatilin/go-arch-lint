@@ -88,6 +88,11 @@ go 1.21
 	if !cfg.Rules.DetectUnused {
 		t.Error("expected default detect_unused to be true")
 	}
+
+	// Verify require_blackbox is true by default
+	if !cfg.ShouldRequireBlackboxTests() {
+		t.Error("expected default require_blackbox to be true")
+	}
 }
 
 func TestLoad_NoGoMod(t *testing.T) {

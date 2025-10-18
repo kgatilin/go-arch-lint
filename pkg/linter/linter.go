@@ -34,6 +34,10 @@ func (fna *fileNodeAdapter) GetRelPath() string {
 	return fna.node.RelPath
 }
 
+func (fna *fileNodeAdapter) GetPackage() string {
+	return fna.node.Package
+}
+
 func (fna *fileNodeAdapter) GetDependencies() []validator.Dependency {
 	deps := make([]validator.Dependency, len(fna.node.Dependencies))
 	for i := range fna.node.Dependencies {
@@ -107,7 +111,7 @@ func Run(projectPath string, format string, detailed bool) (string, string, bool
 
 	// Handle API format separately
 	if format == "api" {
-		s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths)
+		s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths, cfg.ShouldLintTestFiles())
 		filesWithAPI, err := s.ScanWithAPI(cfg.ScanPaths)
 		if err != nil {
 			return "", "", false, err
@@ -124,7 +128,7 @@ func Run(projectPath string, format string, detailed bool) (string, string, bool
 	}
 
 	// Scan files
-	s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths)
+	s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths, cfg.ShouldLintTestFiles())
 
 	var g *graph.Graph
 
@@ -218,7 +222,7 @@ func Run(projectPath string, format string, detailed bool) (string, string, bool
 // generateFullDocumentation creates comprehensive documentation combining structure, rules, dependencies, and API
 func generateFullDocumentation(projectPath string, cfg *config.Config, g *graph.Graph, violations []validator.Violation) string {
 	// Scan for public API
-	s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths)
+	s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths, cfg.ShouldLintTestFiles())
 	filesWithAPI, err := s.ScanWithAPI(cfg.ScanPaths)
 	if err != nil {
 		// Fallback to empty API if scan fails

@@ -101,16 +101,18 @@ func (f FileInfo) GetImports() []string {
 }
 
 type Scanner struct {
-	projectPath string
-	module      string
-	ignorePaths []string
+	projectPath   string
+	module        string
+	ignorePaths   []string
+	lintTestFiles bool
 }
 
-func New(projectPath, module string, ignorePaths []string) *Scanner {
+func New(projectPath, module string, ignorePaths []string, lintTestFiles bool) *Scanner {
 	return &Scanner{
-		projectPath: projectPath,
-		module:      module,
-		ignorePaths: ignorePaths,
+		projectPath:   projectPath,
+		module:        module,
+		ignorePaths:   ignorePaths,
+		lintTestFiles: lintTestFiles,
 	}
 }
 
@@ -140,8 +142,12 @@ func (s *Scanner) Scan(scanPaths []string) ([]FileInfo, error) {
 				return nil
 			}
 
-			// Only process .go files, skip test files
-			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			// Only process .go files
+			if !strings.HasSuffix(path, ".go") {
+				return nil
+			}
+			// Skip test files unless lintTestFiles is enabled
+			if !s.lintTestFiles && strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
 
@@ -188,8 +194,12 @@ func (s *Scanner) ScanDetailed(scanPaths []string) ([]FileInfoDetailed, error) {
 				return nil
 			}
 
-			// Only process .go files, skip test files
-			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			// Only process .go files
+			if !strings.HasSuffix(path, ".go") {
+				return nil
+			}
+			// Skip test files unless lintTestFiles is enabled
+			if !s.lintTestFiles && strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
 
@@ -236,8 +246,12 @@ func (s *Scanner) ScanWithAPI(scanPaths []string) ([]FileInfoWithAPI, error) {
 				return nil
 			}
 
-			// Only process .go files, skip test files
-			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			// Only process .go files
+			if !strings.HasSuffix(path, ".go") {
+				return nil
+			}
+			// Skip test files unless lintTestFiles is enabled
+			if !s.lintTestFiles && strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
 
