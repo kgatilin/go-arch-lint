@@ -127,10 +127,12 @@ Detailed method-level dependencies between files:
   - Graph
 - internal/output
   - Dependency
+  - ErrorContext
   - ExportedDecl
   - FileNode
   - FileWithAPI
   - FormatViolations
+  - FormatViolationsWithContext
   - FullDocumentation
   - GenerateAPIMarkdown
   - GenerateFullDocumentation
@@ -339,6 +341,76 @@ Detailed method-level dependencies between files:
 
 Exported interfaces and types available for consumption:
 
+### linter
+
+#### Types
+
+**GetNodes** `(*graphAdapter) GetNodes() []validator.FileNode`
+
+**GetRelPath** `(*fileNodeAdapter) GetRelPath() string`
+
+**GetDependencies** `(*fileNodeAdapter) GetDependencies() []validator.Dependency`
+
+**GetNodes** `(*outputGraphAdapter) GetNodes() []output.FileNode`
+
+**GetRelPath** `(*outputFileNodeAdapter) GetRelPath() string`
+
+**GetPackage** `(*outputFileNodeAdapter) GetPackage() string`
+
+**GetDependencies** `(*outputFileNodeAdapter) GetDependencies() []output.Dependency`
+
+**GetRelPath** `(*fileWithAPIAdapter) GetRelPath() string`
+
+**GetPackage** `(*fileWithAPIAdapter) GetPackage() string`
+
+**GetExportedDecls** `(*fileWithAPIAdapter) GetExportedDecls() []output.ExportedDecl`
+
+**Run** `Run(string, string, bool) (string, string, error)`
+
+**Init** `Init(string, bool) error`
+
+#### Types
+
+**Preset** `Preset`
+- Properties:
+  - Name string
+  - Description string
+  - Config PresetConfig
+  - ArchitecturalGoals string
+  - Principles []string
+  - ViolationContext map[string]string
+  - RefactoringGuidance string
+
+**PresetConfig** `PresetConfig`
+- Properties:
+  - Structure PresetStructure
+  - Rules PresetRules
+
+**PresetStructure** `PresetStructure`
+- Properties:
+  - RequiredDirectories map[string]string
+  - AllowOtherDirectories bool
+
+**PresetRules** `PresetRules`
+- Properties:
+  - DirectoriesImport map[string][]string
+  - DetectUnused bool
+
+**AvailablePresets** `AvailablePresets() []Preset`
+
+**GetPreset** `GetPreset(string) (*Preset, error)`
+
+**CreateConfigFromPreset** `CreateConfigFromPreset(string, bool) error`
+
+**ErrorPromptConfig** `ErrorPromptConfig`
+- Properties:
+  - Enabled bool
+  - ArchitecturalGoals string
+  - Principles []string
+  - RefactoringGuidance string
+
+---
+
 ### config
 
 #### Types
@@ -350,6 +422,15 @@ Exported interfaces and types available for consumption:
   - IgnorePaths []string
   - Structure Structure
   - Rules Rules
+  - PresetUsed string
+  - ErrorPrompt ErrorPrompt
+
+**ErrorPrompt** `ErrorPrompt`
+- Properties:
+  - Enabled bool
+  - ArchitecturalGoals string
+  - Principles []string
+  - RefactoringGuidance string
 
 **Structure** `Structure`
 - Properties:
@@ -368,6 +449,10 @@ Exported interfaces and types available for consumption:
 **GetRequiredDirectories** `(*Config) GetRequiredDirectories() map[string]string`
 
 **ShouldAllowOtherDirectories** `(*Config) ShouldAllowOtherDirectories() bool`
+
+**GetPresetUsed** `(*Config) GetPresetUsed() string`
+
+**GetErrorPrompt** `(*Config) GetErrorPrompt() ErrorPrompt`
 
 **Load** `Load(string) (*Config, error)`
 
@@ -461,6 +546,16 @@ Exported interfaces and types available for consumption:
 **Violation** `Violation`
 
 **GenerateMarkdown** `GenerateMarkdown(Graph) string`
+
+**ErrorContext** `ErrorContext`
+- Properties:
+  - Enabled bool
+  - PresetName string
+  - ArchitecturalGoals string
+  - Principles []string
+  - RefactoringGuidance string
+
+**FormatViolationsWithContext** `FormatViolationsWithContext([]Violation, *ErrorContext) string`
 
 **FormatViolations** `FormatViolations([]Violation) string`
 
@@ -599,65 +694,6 @@ Exported interfaces and types available for consumption:
 ---
 
 ### main
-
----
-
-### linter
-
-#### Types
-
-**GetNodes** `(*graphAdapter) GetNodes() []validator.FileNode`
-
-**GetRelPath** `(*fileNodeAdapter) GetRelPath() string`
-
-**GetDependencies** `(*fileNodeAdapter) GetDependencies() []validator.Dependency`
-
-**GetNodes** `(*outputGraphAdapter) GetNodes() []output.FileNode`
-
-**GetRelPath** `(*outputFileNodeAdapter) GetRelPath() string`
-
-**GetPackage** `(*outputFileNodeAdapter) GetPackage() string`
-
-**GetDependencies** `(*outputFileNodeAdapter) GetDependencies() []output.Dependency`
-
-**GetRelPath** `(*fileWithAPIAdapter) GetRelPath() string`
-
-**GetPackage** `(*fileWithAPIAdapter) GetPackage() string`
-
-**GetExportedDecls** `(*fileWithAPIAdapter) GetExportedDecls() []output.ExportedDecl`
-
-**Run** `Run(string, string, bool) (string, string, error)`
-
-**Init** `Init(string, bool) error`
-
-#### Types
-
-**Preset** `Preset`
-- Properties:
-  - Name string
-  - Description string
-  - Config PresetConfig
-
-**PresetConfig** `PresetConfig`
-- Properties:
-  - Structure PresetStructure
-  - Rules PresetRules
-
-**PresetStructure** `PresetStructure`
-- Properties:
-  - RequiredDirectories map[string]string
-  - AllowOtherDirectories bool
-
-**PresetRules** `PresetRules`
-- Properties:
-  - DirectoriesImport map[string][]string
-  - DetectUnused bool
-
-**AvailablePresets** `AvailablePresets() []Preset`
-
-**GetPreset** `GetPreset(string) (*Preset, error)`
-
-**CreateConfigFromPreset** `CreateConfigFromPreset(string, bool) error`
 
 ---
 

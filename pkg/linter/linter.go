@@ -191,8 +191,23 @@ func Run(projectPath string, format string, detailed bool) (string, string, erro
 		graphOutput = generateFullDocumentation(projectPath, cfg, g, violations)
 	}
 
-	// Format violations
-	violationsOutput := output.FormatViolations(outViolations)
+	// Format violations with architectural context from config
+	var violationsOutput string
+	errorPrompt := cfg.GetErrorPrompt()
+	if errorPrompt.Enabled {
+		// Create error context from config
+		errorContext := &output.ErrorContext{
+			Enabled:             true,
+			PresetName:          cfg.PresetUsed,
+			ArchitecturalGoals:  errorPrompt.ArchitecturalGoals,
+			Principles:          errorPrompt.Principles,
+			RefactoringGuidance: errorPrompt.RefactoringGuidance,
+		}
+		violationsOutput = output.FormatViolationsWithContext(outViolations, errorContext)
+	} else {
+		// Error prompt disabled, use standard formatting
+		violationsOutput = output.FormatViolations(outViolations)
+	}
 
 	return graphOutput, violationsOutput, nil
 }

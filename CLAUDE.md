@@ -8,6 +8,69 @@ go-arch-lint is a Go architecture linter that enforces strict dependency rules b
 
 The project uses a strict 3-layer architecture with **complete isolation of internal packages**: `cmd → pkg → internal`, where `internal: []` means internal packages cannot import each other.
 
+## Customizable Architectural Error Prompts
+
+When projects are initialized with `go-arch-lint init --preset=<name>`, the `.goarchlint` config includes an `error_prompt` section. This enables **customizable architectural context** in violation output.
+
+### How It Works
+
+1. **Auto-populated from preset**: When you run `go-arch-lint init --preset=ddd` (or simple, hexagonal), the config is populated with default architectural guidance for that pattern
+2. **Fully customizable**: Edit the `error_prompt` section in `.goarchlint` to match your project's specific needs, team conventions, or custom architecture
+3. **Can be disabled**: Set `enabled: false` to use standard violation output
+
+### Error Prompt Structure
+
+```yaml
+error_prompt:
+  enabled: true
+  architectural_goals: |
+    Multi-line description of what your architecture aims to achieve
+  principles:
+    - "Principle 1"
+    - "Principle 2"
+  refactoring_guidance: |
+    Step-by-step guidance for refactoring toward compliance
+```
+
+### What It Does
+
+Transforms violations from simple linter errors into **educational prompts** that include:
+- **Architectural Goals**: Why this architecture matters for YOUR project
+- **Key Principles**: Core rules specific to YOUR team's conventions
+- **Violations**: Actual violations with file/line information
+- **Refactoring Guidance**: Step-by-step guidance customized to YOUR codebase
+
+This helps developers and AI agents understand:
+1. **WHY** the architecture matters (goals and principles)
+2. **WHAT** is wrong (violations with context)
+3. **HOW** to fix it properly (refactoring guidance with examples)
+
+The goal is to encourage **architectural refactoring**, not just mechanical compliance with rules.
+
+### Customization Examples
+
+**For a microservices project**:
+```yaml
+error_prompt:
+  enabled: true
+  architectural_goals: |
+    Our microservices architecture aims to:
+    - Keep services independent and deployable separately
+    - Enforce bounded contexts between domains
+    - Enable team autonomy
+```
+
+**For a legacy migration project**:
+```yaml
+error_prompt:
+  enabled: true
+  refactoring_guidance: |
+    We're migrating from monolith to clean architecture:
+    1. First extract to internal/legacy
+    2. Then create interfaces in internal/domain
+    3. Finally wire new implementations in pkg/
+```
+
 ## Build and Test Commands
 
 ```bash

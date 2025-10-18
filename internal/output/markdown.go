@@ -123,15 +123,54 @@ func isStdLib(importPath string) bool {
 	return !strings.Contains(parts[0], ".")
 }
 
-// FormatViolations creates a formatted report of violations
-func FormatViolations(violations []Violation) string {
+// ErrorContext contains architectural guidance for error messages
+type ErrorContext struct {
+	Enabled             bool
+	PresetName          string
+	ArchitecturalGoals  string
+	Principles          []string
+	RefactoringGuidance string
+}
+
+// FormatViolationsWithContext creates a formatted report with architectural context
+func FormatViolationsWithContext(violations []Violation, errorContext *ErrorContext) string {
 	if len(violations) == 0 {
 		return ""
 	}
 
 	var sb strings.Builder
 
-	sb.WriteString("DEPENDENCY VIOLATIONS DETECTED\n\n")
+	// Add architectural context preamble if enabled
+	if errorContext != nil && errorContext.Enabled {
+		sb.WriteString("╔════════════════════════════════════════════════════════════════════════════════╗\n")
+		sb.WriteString("║                     ARCHITECTURAL VIOLATIONS DETECTED                          ║\n")
+		sb.WriteString("╚════════════════════════════════════════════════════════════════════════════════╝\n\n")
+
+		if errorContext.PresetName != "" {
+			sb.WriteString(fmt.Sprintf("This project uses the '%s' architectural preset.\n", errorContext.PresetName))
+		}
+		sb.WriteString("The violations below indicate that the current structure does not align with\n")
+		sb.WriteString("the target architecture. Please review the architectural goals and refactoring\n")
+		sb.WriteString("guidance to understand how to properly restructure the code.\n\n")
+
+		if errorContext.ArchitecturalGoals != "" {
+			sb.WriteString("┌─ ARCHITECTURAL GOALS ──────────────────────────────────────────────────────────┐\n")
+			sb.WriteString(errorContext.ArchitecturalGoals)
+			sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
+		}
+
+		if len(errorContext.Principles) > 0 {
+			sb.WriteString("┌─ KEY PRINCIPLES ───────────────────────────────────────────────────────────────┐\n")
+			for _, principle := range errorContext.Principles {
+				sb.WriteString(fmt.Sprintf("  • %s\n", principle))
+			}
+			sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
+		}
+
+		sb.WriteString("┌─ VIOLATIONS ───────────────────────────────────────────────────────────────────┐\n\n")
+	} else {
+		sb.WriteString("DEPENDENCY VIOLATIONS DETECTED\n\n")
+	}
 
 	for _, v := range violations {
 		sb.WriteString(fmt.Sprintf("[ERROR] %s\n", v.GetType()))
@@ -150,7 +189,27 @@ func FormatViolations(violations []Violation) string {
 		sb.WriteString("\n")
 	}
 
+	if errorContext != nil && errorContext.Enabled {
+		sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
+
+		if errorContext.RefactoringGuidance != "" {
+			sb.WriteString("┌─ REFACTORING GUIDANCE ─────────────────────────────────────────────────────────┐\n")
+			sb.WriteString(errorContext.RefactoringGuidance)
+			sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
+		}
+
+		sb.WriteString("💡 TIP: These violations show architectural misalignment, not just linter errors.\n")
+		sb.WriteString("   Focus on understanding WHY the target architecture matters, then refactor\n")
+		sb.WriteString("   accordingly. Don't just move code to make the linter happy - restructure\n")
+		sb.WriteString("   to achieve the architectural goals described above.\n")
+	}
+
 	return sb.String()
+}
+
+// FormatViolations creates a formatted report of violations (without context)
+func FormatViolations(violations []Violation) string {
+	return FormatViolationsWithContext(violations, nil)
 }
 
 // GenerateAPIMarkdown creates a markdown representation of public APIs by package
