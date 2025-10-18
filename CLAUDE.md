@@ -8,6 +8,140 @@ go-arch-lint is a Go architecture linter that enforces strict dependency rules b
 
 The project uses a strict 3-layer architecture with **complete isolation of internal packages**: `cmd → pkg → internal`, where `internal: []` means internal packages cannot import each other.
 
+## Development Workflow: Using the Junior Developer Agent
+
+**IMPORTANT**: To maximize efficiency and speed, leverage the junior developer agent for implementing well-defined tasks. This is the recommended workflow for all development work on this project.
+
+### The Workflow
+
+1. **Create a comprehensive implementation plan**: Analyze the requirements and create a detailed, step-by-step plan that includes:
+   - Architectural decisions you've made (e.g., "Use filepath.Match for glob patterns")
+   - Specific files to modify and what changes to make
+   - Exact function signatures, struct fields, and method names
+   - References to existing patterns to follow (e.g., "Follow the same pattern as GetIgnorePaths()")
+   - Test cases to write and edge cases to handle
+   - Order of implementation if there are dependencies
+2. **Hand over the complete plan to a single junior dev**: Use the Task tool with `subagent_type=junior-dev-executor` once, providing the entire comprehensive plan
+   - Give explicit, clear requirements for each change
+   - Point to existing code examples to follow
+   - Specify architectural constraints that must be maintained
+3. **Validate and review the implementation**: Once the junior dev completes the work, thoroughly review:
+   - Run `./go-arch-lint .` to verify zero violations
+   - Run `go test ./...` to ensure all tests pass
+   - Review code quality, naming conventions, and adherence to patterns
+   - Check that architectural constraints are maintained
+   - Verify edge cases are handled properly
+4. **Provide detailed feedback**: If issues are found, create specific, actionable feedback:
+   - Point out exactly what needs to be fixed
+   - Explain why it's a problem (architectural, style, correctness)
+   - Reference the correct pattern or approach to use
+5. **Iterate with the junior dev**: Hand the feedback back to the same junior dev to make corrections
+6. **Repeat the review cycle** until the implementation meets quality standards and all validations pass
+
+### When to Use the Junior Dev Agent
+
+**DO use the junior dev for** (after YOU create the comprehensive plan):
+- Implementing simple features with clear requirements across multiple files (e.g., add config field, update scanner logic, write tests)
+- Writing basic unit tests for straightforward functionality
+- Adding struct fields with simple accessor methods (following existing patterns)
+- Updating configuration structures (adding fields, parsing logic)
+- Simple refactoring within a single package (renaming, extracting methods)
+- Adding validation logic with known requirements and clear error messages
+- Fixing minor bugs with obvious solutions
+- Creating utility/helper functions
+- Updating documentation for simple changes
+- Any well-scoped implementation where YOU have already made all architectural decisions
+
+**DO NOT use the junior dev for**:
+- Creating adapter types in pkg/linter (architectural, requires understanding DIP and slice covariance)
+- Architectural planning or design decisions (YOU must make these first)
+- Complex refactoring that affects multiple packages
+- Investigating bugs without clear root cause
+- Research or exploration tasks
+- Changes that modify interfaces between internal packages
+- Performance optimization requiring profiling or deep analysis
+- Tasks where requirements are unclear or incomplete (clarify first, then delegate)
+
+### Example Workflow
+
+```
+User: Add support for excluding specific files from scanning
+
+Senior Claude (Planning Phase):
+1. Analyzes: Need to add ExcludePatterns to Config, update scanner to filter files
+2. Identifies architectural impact: Pattern matching approach needed
+3. Makes architectural decisions:
+   - Use filepath.Match for glob patterns (simple, stdlib)
+   - Add to both Config struct and YAML parsing
+   - Filter in Scanner.Scan() before creating FileInfo
+4. Creates comprehensive plan with explicit requirements:
+
+   IMPLEMENTATION PLAN:
+
+   A. Modify internal/config/config.go:
+      - Add `ExcludePatterns []string` field to Config struct (add yaml tag: `exclude_patterns`)
+      - Add method: `func (c *Config) GetExcludePatterns() []string`
+        (follow exact pattern of existing GetIgnorePaths() method)
+
+   B. Modify internal/scanner/scanner.go:
+      - In Scanner.Scan() method, after getting file path, check against exclude patterns
+      - Use filepath.Match(pattern, relPath) for matching
+      - Skip file if any pattern matches (continue the walk loop)
+      - Handle filepath.Match errors (bad pattern) by logging/skipping
+
+   C. Write tests in internal/config/config_test.go:
+      - Test loading exclude_patterns from YAML
+      - Test GetExcludePatterns() returns correct values
+      - Test with empty exclude_patterns
+
+   D. Write tests in internal/scanner/scanner_test.go:
+      - Test that files matching exclude patterns are skipped
+      - Test with glob patterns like "*.txt", "*_test.go", "vendor/*"
+      - Test that non-matching files are still scanned
+      - Test with multiple patterns
+
+   CONSTRAINTS:
+   - Must maintain zero violations when running `./go-arch-lint .`
+   - internal/scanner CANNOT import internal/config (use structural typing)
+   - Follow existing code style and patterns exactly
+
+Senior Claude (Execution):
+→ Delegates entire plan to ONE junior dev with all details
+→ Junior dev implements all changes (A, B, C, D)
+
+Senior Claude (Review - Iteration 1):
+→ Runs `./go-arch-lint .` → ✓ Zero violations
+→ Runs `go test ./...` → ✓ All tests pass
+→ Reviews code → Found issues:
+   - ExcludePatterns field has wrong YAML tag (`exclude` instead of `exclude_patterns`)
+   - Missing edge case: empty string pattern should be skipped
+   - Test coverage: missing test for bad glob pattern (e.g., "[invalid")
+
+Senior Claude (Feedback):
+→ Provides specific feedback to junior dev:
+   "Please fix these three issues:
+   1. Change YAML tag from `exclude` to `exclude_patterns`
+   2. In Scanner.Scan(), skip empty patterns before calling filepath.Match
+   3. Add test case for invalid glob pattern in scanner_test.go"
+
+→ Junior dev makes corrections
+
+Senior Claude (Review - Iteration 2):
+→ Runs validations again → ✓ All pass
+→ Reviews fixes → ✓ All issues resolved
+→ APPROVED: Implementation complete
+```
+
+### Benefits
+
+- **Speed**: Junior dev handles all implementation work in one go, senior focuses on planning and review
+- **Focus**: Senior agent focuses on architecture and design, junior dev handles coding
+- **Quality**: Iterative review cycles ensure high-quality implementation aligned with patterns
+- **Efficiency**: Reduces senior agent token usage by delegating implementation details
+- **Thoroughness**: Comprehensive upfront planning leads to better first-pass implementation
+
+**Remember**: Always validate that `./go-arch-lint .` shows zero violations after any changes. The self-validation requirement is non-negotiable.
+
 ## Customizable Architectural Error Prompts
 
 When projects are initialized with `go-arch-lint init --preset=<name>`, the `.goarchlint` config includes an `error_prompt` section. This enables **customizable architectural context** in violation output.
@@ -253,12 +387,29 @@ Each internal package is a **completely isolated primitive** with a single respo
 
 ## Testing Strategy
 
-**Internal packages**: Use white-box tests (`package mypackage`) because:
-- Tests need to create adapter types to bridge dependencies
-- Can access package internals for setup
-- Mirrors the adapter pattern used in `pkg/linter`
+### Three Levels of Testing
 
-**Example from `internal/validator/validator_test.go`**:
+1. **Unit Tests** (`internal/*/` packages)
+   - Use white-box tests (`package mypackage`) to access internals
+   - Create adapter types to bridge dependencies (mirrors production adapters)
+   - Test individual components in isolation
+   - Example: `internal/validator/validator_test.go`
+
+2. **Integration Tests** (`pkg/linter/linter_test.go`)
+   - Test multiple components working together via public API
+   - Create real temporary file structures with Go code
+   - Verify end-to-end workflows (scan → build → validate → output)
+   - DO NOT build/run the binary - test at the library level
+   - Example: `TestRun_SharedExternalImports_Detection`
+
+3. **E2E Tests** (`cmd/go-arch-lint/main_test.go`)
+   - Build the actual binary and run as subprocess
+   - Test CLI behavior: flags, exit codes, stdout/stderr
+   - Verify real-world usage scenarios
+   - Catch issues with CLI parsing and OS integration
+   - Example: `TestCLI_SharedExternalImports_WarnMode`
+
+**Example Unit Test (internal/validator/validator_test.go)**:
 ```go
 package validator  // white-box, not validator_test
 
@@ -272,6 +423,54 @@ func TestValidate_PkgToPkgViolation(t *testing.T) {
     v := New(cfg, &testGraphAdapter{g: g})  // Use adapter!
     violations := v.Validate()
     // assertions...
+}
+```
+
+**Example Integration Test (pkg/linter/linter_test.go)**:
+```go
+package linter_test
+
+func TestRun_SharedExternalImports_Detection(t *testing.T) {
+    tmpDir := t.TempDir()
+
+    // Create .goarchlint config
+    configYAML := `rules: ...`
+    os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644)
+
+    // Create test Go files
+    mainGo := `package main ...`
+    os.WriteFile(filepath.Join(tmpDir, "cmd/main.go"), []byte(mainGo), 0644)
+
+    // Test linter.Run() directly
+    _, violations, shouldFail, err := linter.Run(tmpDir, "markdown", false)
+
+    // Assertions on violations and shouldFail
+}
+```
+
+**Example E2E Test (cmd/go-arch-lint/main_test.go)**:
+```go
+package main_test
+
+func TestCLI_ExitCodes(t *testing.T) {
+    tmpDir := t.TempDir()
+
+    // Build the binary
+    binary := buildBinary(t)
+
+    // Create test project
+    // ...
+
+    // Run as subprocess
+    cmd := exec.Command(binary, ".")
+    cmd.Dir = tmpDir
+    output, err := cmd.CombinedOutput()
+
+    // Check exit code, stdout, stderr
+    exitCode := cmd.ProcessState.ExitCode()
+    if exitCode != expectedCode {
+        t.Errorf("wrong exit code: got %d, want %d", exitCode, expectedCode)
+    }
 }
 ```
 

@@ -98,3 +98,51 @@ func TestLoad_NoGoMod(t *testing.T) {
 		t.Fatal("expected error when go.mod is missing")
 	}
 }
+
+func TestConfig_SharedExternalImports(t *testing.T) {
+	// Test loading config with shared_external_imports
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := "module example.com/test\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create .goarchlint with shared_external_imports
+	configYAML := `
+module: example.com/test
+rules:
+  shared_external_imports:
+    detect: true
+    mode: warn
+    exclusions:
+      - fmt
+      - strings
+    exclusion_patterns:
+      - encoding/*
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load config
+	cfg, err := config.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Verify fields
+	if !cfg.ShouldDetectSharedExternalImports() {
+		t.Error("Expected detect=true")
+	}
+	if cfg.GetSharedExternalImportsMode() != "warn" {
+		t.Errorf("Expected mode=warn, got %s", cfg.GetSharedExternalImportsMode())
+	}
+	if len(cfg.GetSharedExternalImportsExclusions()) != 2 {
+		t.Errorf("Expected 2 exclusions, got %d", len(cfg.GetSharedExternalImportsExclusions()))
+	}
+	if len(cfg.GetSharedExternalImportsExclusionPatterns()) != 1 {
+		t.Errorf("Expected 1 exclusion pattern, got %d", len(cfg.GetSharedExternalImportsExclusionPatterns()))
+	}
+}

@@ -172,6 +172,19 @@ rules:
 
   # Detect unused packages (packages not transitively imported by cmd)
   detect_unused: true
+
+  # Detect shared external imports (NEW!)
+  shared_external_imports:
+    detect: true              # Enable detection
+    mode: warn                # "warn" (report only) or "error" (fail build)
+    exclusions:              # Exact package names to allow
+      - fmt
+      - strings
+      - errors
+      - github.com/google/uuid
+    exclusion_patterns:       # Glob patterns to allow
+      - encoding/*            # All encoding/* packages
+      - golang.org/x/*        # All golang.org/x/* packages
 ```
 
 **Customizable Error Context**: When using presets, the `error_prompt` section is automatically populated with architectural guidance. You can:
@@ -205,6 +218,59 @@ This strict configuration requires using the adapter pattern in `pkg/` to bridge
 
 If no `.goarchlint` file is found, default rules are used.
 
+### Shared External Imports Detection
+
+Detects when multiple architectural layers import the same external package (non-stdlib, non-local), which often indicates responsibility duplication or architectural violations.
+
+**Use Case**: Find packages like `database/sql` imported by both `cmd` and `internal/infra`, suggesting that the cmd layer is bypassing the repository abstraction.
+
+**Configuration:**
+```yaml
+rules:
+  shared_external_imports:
+    detect: true              # Enable detection
+    mode: warn                # "warn" (report only) or "error" (fail build)
+    exclusions:              # Exact package names to allow across layers
+      - fmt
+      - strings
+      - errors
+      - time
+      - github.com/google/uuid
+    exclusion_patterns:       # Glob patterns to allow
+      - encoding/*            # All encoding/* packages OK everywhere
+      - golang.org/x/*        # All golang.org/x/* packages OK
+```
+
+**Modes:**
+- `warn` (default): Reports violations but doesn't fail the build (exit code 0). Use this to discover violations initially.
+- `error`: Fails the build on violations (exit code 1). Use this once you've fixed violations and want to enforce the rule.
+
+**Workflow:**
+1. Enable in `warn` mode to discover all shared imports
+2. Review each violation:
+   - If it's a utility (like `fmt`), add to `exclusions`
+   - If it's an architectural violation (like `database/sql`), refactor to centralize usage in one layer
+3. Switch to `error` mode to enforce the rule going forward
+
+**Example Violation:**
+```
+[ERROR] Shared External Import
+  File: cmd/main.go
+  Issue: External package 'database/sql' imported by 2 layers
+  Imported by:
+    - cmd/main.go (layer: cmd)
+    - internal/infra/sqlite.go (layer: internal)
+  Rule: External packages should typically be owned by a single layer
+  Fix: Consider: (1) Add 'database/sql' to shared_external_imports.exclusions if it's a utility,
+       or (2) Refactor to centralize usage in one layer
+```
+
+**Benefits:**
+- Prevents responsibility duplication across layers
+- Catches when layers bypass abstraction boundaries
+- Self-documenting: exclusion list becomes a catalog of approved utilities
+- Gradual adoption: warn mode allows incremental fixing
+
 ## Architecture Rules
 
 The tool enforces the following dependency rules:
@@ -215,12 +281,13 @@ The tool enforces the following dependency rules:
 3. **No cross-cmd imports**: `cmd/X` cannot import `cmd/Y`
 4. **Directory constraints**: Each top-level directory (`cmd`, `pkg`, `internal`) has rules about what it can import
 5. **Unused package detection**: Packages in `pkg/` must be transitively imported from `cmd/`
+6. **Shared external imports** (optional): External packages should be owned by a single layer (configurable)
 
 ### Structure Validation (if configured)
-6. **Missing directory**: Required directories must exist
-7. **Empty directory**: Required directories must contain `.go` files (not just test files)
-8. **Unused directory**: Required directories must have code in the dependency graph
-9. **Unexpected directory**: When `allow_other_directories: false`, only required directories can exist
+7. **Missing directory**: Required directories must exist
+8. **Empty directory**: Required directories must contain `.go` files (not just test files)
+9. **Unused directory**: Required directories must have code in the dependency graph
+10. **Unexpected directory**: When `allow_other_directories: false`, only required directories can exist
 
 ## Output
 
