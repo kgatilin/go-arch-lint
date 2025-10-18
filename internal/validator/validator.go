@@ -376,10 +376,23 @@ func (v *Validator) validateFile(node FileNode) []Violation {
 
 		// Rule 4: Check directory import rules from config
 		dirImports := v.cfg.GetDirectoriesImport()
-		if allowed, exists := dirImports[fileTopDir]; exists {
-			// Check if the import is allowed
-			// This includes checking same-directory imports (e.g., internal importing internal)
-			if !v.isImportAllowed(depTopDir, allowed) {
+
+		// Check for most specific rule first (exact directory match), then fall back to top-level
+		var allowed []string
+		var ruleKey string
+		var exists bool
+
+		// Try exact directory match first (e.g., "cmd/dw")
+		if allowed, exists = dirImports[fileDir]; exists {
+			ruleKey = fileDir
+		} else if allowed, exists = dirImports[fileTopDir]; exists {
+			// Fall back to top-level directory (e.g., "cmd")
+			ruleKey = fileTopDir
+		}
+
+		if exists {
+			// Check if the import is allowed (using full path, not just top-level dir)
+			if !v.isImportAllowed(localPath, allowed) {
 				// Determine appropriate fix message
 				fixMsg := "Restructure dependencies according to allowed imports"
 				if fileTopDir == "internal" && depTopDir == "internal" {
@@ -390,7 +403,7 @@ func (v *Validator) validateFile(node FileNode) []Violation {
 					Type:  ViolationForbidden,
 					File:  node.GetRelPath(),
 					Issue: fmt.Sprintf("%s imports %s", fileDir, localPath),
-					Rule:  fmt.Sprintf("%s can only import from: %v", fileTopDir, allowed),
+					Rule:  fmt.Sprintf("%s can only import from: %v", ruleKey, allowed),
 					Fix:   fixMsg,
 				})
 			}
@@ -516,7 +529,12 @@ func getDirectSubpackage(parent, child string) string {
 
 func (v *Validator) isImportAllowed(importing string, allowed []string) bool {
 	for _, a := range allowed {
+		// Exact match
 		if importing == a {
+			return true
+		}
+		// Prefix match: if "internal/app" is allowed, then "internal/app/user" is also allowed
+		if strings.HasPrefix(importing, a+"/") {
 			return true
 		}
 	}

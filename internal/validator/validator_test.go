@@ -385,3 +385,169 @@ func TestValidate_NoViolations(t *testing.T) {
 		}
 	}
 }
+
+func TestValidate_SubdirectorySpecificRule(t *testing.T) {
+	// Regression test for bug where subdirectory-specific rules (cmd/dw) were ignored
+	files := []scanner.FileInfo{
+		{
+			RelPath: "cmd/dw/claude.go",
+			Package: "main",
+			Imports: []string{
+				"github.com/test/project/internal/app",
+				"github.com/test/project/internal/infra",
+			},
+		},
+		{
+			RelPath: "cmd/dw/logs.go",
+			Package: "main",
+			Imports: []string{
+				"github.com/test/project/internal/app",
+			},
+		},
+		{
+			RelPath: "internal/app/app.go",
+			Package: "app",
+			Imports: []string{
+				"github.com/test/project/internal/domain",
+			},
+		},
+		{
+			RelPath: "internal/infra/db.go",
+			Package: "infra",
+			Imports: []string{
+				"github.com/test/project/internal/domain",
+			},
+		},
+		{
+			RelPath: "internal/domain/user.go",
+			Package: "domain",
+		},
+	}
+
+	g := graph.Build(toGraphFiles(files), "github.com/test/project")
+
+	cfg := &config.Config{
+		Module: "github.com/test/project",
+		Rules: config.Rules{
+			DirectoriesImport: map[string][]string{
+				"cmd": {"internal/app", "internal/infra"},
+				"cmd/dw": {"internal/app", "internal/infra"}, // More specific rule
+				"internal/app": {"internal/domain"},
+				"internal/domain": {},
+				"internal/infra": {"internal/domain"},
+			},
+			DetectUnused: false,
+		},
+	}
+
+	v := New(cfg, &testGraphAdapter{g: g})
+	violations := v.Validate()
+
+	// Should not have any violations - the subdirectory-specific rule should allow these imports
+	for _, viol := range violations {
+		if viol.Type == ViolationForbidden && viol.File == "cmd/dw/claude.go" {
+			t.Errorf("unexpected ViolationForbidden for cmd/dw/claude.go: %s", viol.Issue)
+		}
+		if viol.Type == ViolationForbidden && viol.File == "cmd/dw/logs.go" {
+			t.Errorf("unexpected ViolationForbidden for cmd/dw/logs.go: %s", viol.Issue)
+		}
+	}
+
+	if len(violations) != 0 {
+		t.Logf("violations found:")
+		for _, viol := range violations {
+			t.Logf("  %v: %s in %s", viol.Type, viol.Issue, viol.File)
+		}
+	}
+}
+
+func TestValidate_PrefixMatchingForAllowedImports(t *testing.T) {
+	// Test that if "internal/app" is allowed, then "internal/app/user" is also allowed
+	files := []scanner.FileInfo{
+		{
+			RelPath: "cmd/api/main.go",
+			Package: "main",
+			Imports: []string{
+				"github.com/test/project/internal/app/user",
+				"github.com/test/project/internal/infra/database",
+			},
+		},
+		{
+			RelPath: "internal/app/user/service.go",
+			Package: "user",
+		},
+		{
+			RelPath: "internal/infra/database/conn.go",
+			Package: "database",
+		},
+	}
+
+	g := graph.Build(toGraphFiles(files), "github.com/test/project")
+
+	cfg := &config.Config{
+		Module: "github.com/test/project",
+		Rules: config.Rules{
+			DirectoriesImport: map[string][]string{
+				"cmd": {"internal/app", "internal/infra"}, // Allows subpackages too
+			},
+			DetectUnused: false,
+		},
+	}
+
+	v := New(cfg, &testGraphAdapter{g: g})
+	violations := v.Validate()
+
+	// Should not have any violations - prefix matching should allow these imports
+	for _, viol := range violations {
+		if viol.Type == ViolationForbidden {
+			t.Errorf("unexpected ViolationForbidden: %s - %s", viol.File, viol.Issue)
+		}
+	}
+}
+
+func TestValidate_ForbiddenImportNotInAllowedList(t *testing.T) {
+	// Ensure that imports NOT in the allowed list are still caught
+	files := []scanner.FileInfo{
+		{
+			RelPath: "cmd/api/main.go",
+			Package: "main",
+			Imports: []string{
+				"github.com/test/project/internal/forbidden",
+			},
+		},
+		{
+			RelPath: "internal/forbidden/service.go",
+			Package: "forbidden",
+		},
+	}
+
+	g := graph.Build(toGraphFiles(files), "github.com/test/project")
+
+	cfg := &config.Config{
+		Module: "github.com/test/project",
+		Rules: config.Rules{
+			DirectoriesImport: map[string][]string{
+				"cmd": {"internal/app", "internal/infra"}, // Does NOT include "internal/forbidden"
+			},
+			DetectUnused: false,
+		},
+	}
+
+	v := New(cfg, &testGraphAdapter{g: g})
+	violations := v.Validate()
+
+	found := false
+	for _, viol := range violations {
+		if viol.Type == ViolationForbidden && viol.File == "cmd/api/main.go" {
+			found = true
+			if viol.Rule != "cmd can only import from: [internal/app internal/infra]" {
+				t.Errorf("expected specific rule message, got %q", viol.Rule)
+			}
+			break
+		}
+	}
+
+	if !found {
+		t.Error("expected ViolationForbidden for cmd importing internal/forbidden")
+	}
+}
