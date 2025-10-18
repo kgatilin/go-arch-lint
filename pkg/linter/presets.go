@@ -376,3 +376,100 @@ func detectModuleFromGoMod(projectPath string) (string, error) {
 
 	return "", fmt.Errorf("module not found in go.mod")
 }
+
+// RefreshConfigFromPreset updates an existing .goarchlint file with the latest preset version
+func RefreshConfigFromPreset(projectPath, presetName string) error {
+	configPath := filepath.Join(projectPath, ".goarchlint")
+
+	// Check if .goarchlint exists
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return fmt.Errorf(".goarchlint not found, run 'go-arch-lint init' first")
+	}
+
+	// If preset not specified, try to read from existing config
+	if presetName == "" {
+		// Read existing config to get preset_used
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			return fmt.Errorf("reading .goarchlint: %w", err)
+		}
+
+		// Parse YAML to extract preset_used
+		type ConfigFile struct {
+			PresetUsed string `yaml:"preset_used"`
+		}
+		var cfg ConfigFile
+		if err := yaml.Unmarshal(data, &cfg); err != nil {
+			return fmt.Errorf("parsing .goarchlint: %w", err)
+		}
+
+		if cfg.PresetUsed == "" || cfg.PresetUsed == "custom" {
+			return fmt.Errorf("config was not created from a preset, cannot refresh. Use --preset to specify a preset to switch to.")
+		}
+
+		presetName = cfg.PresetUsed
+	}
+
+	// Get the preset
+	preset, err := GetPreset(presetName)
+	if err != nil {
+		return err
+	}
+
+	// Backup existing config
+	backupPath := configPath + ".backup"
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("reading existing config: %w", err)
+	}
+	if err := os.WriteFile(backupPath, data, 0644); err != nil {
+		return fmt.Errorf("creating backup: %w", err)
+	}
+
+	// Detect module from go.mod
+	module, err := detectModuleFromGoMod(projectPath)
+	if err != nil {
+		return fmt.Errorf("detecting module: %w", err)
+	}
+
+	// Build complete config with error_prompt from preset
+	type ConfigFile struct {
+		Module      string              `yaml:"module"`
+		PresetUsed  string              `yaml:"preset_used"`
+		ErrorPrompt ErrorPromptConfig   `yaml:"error_prompt"`
+		Structure   PresetStructure     `yaml:"structure"`
+		Rules       PresetRules         `yaml:"rules"`
+	}
+
+	configData := ConfigFile{
+		Module:     module,
+		PresetUsed: presetName,
+		ErrorPrompt: ErrorPromptConfig{
+			Enabled:             true,
+			ArchitecturalGoals:  preset.ArchitecturalGoals,
+			Principles:          preset.Principles,
+			RefactoringGuidance: preset.RefactoringGuidance,
+		},
+		Structure: preset.Config.Structure,
+		Rules:     preset.Config.Rules,
+	}
+
+	// Marshal to YAML
+	yamlData, err := yaml.Marshal(configData)
+	if err != nil {
+		return fmt.Errorf("marshaling config: %w", err)
+	}
+
+	// Create config content with header
+	configContent := fmt.Sprintf("# Refreshed by go-arch-lint refresh with preset=%s\n", presetName)
+	configContent += "# Previous config backed up to .goarchlint.backup\n"
+	configContent += "# You can customize the error_prompt section to fit your project's needs\n\n"
+	configContent += string(yamlData)
+
+	// Write updated .goarchlint file
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		return fmt.Errorf("writing config file: %w", err)
+	}
+
+	return nil
+}

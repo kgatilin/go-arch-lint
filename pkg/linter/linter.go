@@ -449,33 +449,55 @@ func Init(projectPath, preset string, createDirs bool) error {
 		return nil
 	}
 
-	// Generate dependency graph documentation
-	graphOutput, _, _, err := Run(projectPath, "markdown", true)
+	// Generate comprehensive documentation (structure + rules + dependencies + API)
+	fullDocsOutput, _, _, err := Run(projectPath, "full", true)
 	if err != nil {
-		return fmt.Errorf("failed to generate dependency graph: %w", err)
+		return fmt.Errorf("failed to generate documentation: %w", err)
 	}
 	archGenPath := filepath.Join(docsPath, "arch-generated.md")
-	if err := os.WriteFile(archGenPath, []byte(graphOutput), 0644); err != nil {
+	if err := os.WriteFile(archGenPath, []byte(fullDocsOutput), 0644); err != nil {
 		return fmt.Errorf("failed to write arch-generated.md: %w", err)
 	}
-	fmt.Println("✓ Created docs/arch-generated.md")
-
-	// Generate public API documentation
-	apiOutput, _, _, err := Run(projectPath, "api", false)
-	if err != nil {
-		return fmt.Errorf("failed to generate API documentation: %w", err)
-	}
-	apiGenPath := filepath.Join(docsPath, "public-api-generated.md")
-	if err := os.WriteFile(apiGenPath, []byte(apiOutput), 0644); err != nil {
-		return fmt.Errorf("failed to write public-api-generated.md: %w", err)
-	}
-	fmt.Println("✓ Created docs/public-api-generated.md")
+	fmt.Println("✓ Created docs/arch-generated.md (comprehensive documentation)")
 
 	fmt.Println("\nInitialization complete!")
 	fmt.Println("\nNext steps:")
 	fmt.Println("  1. Add docs/goarch_agent_instructions.md to your CLAUDE.md")
 	fmt.Println("  2. Run: go-arch-lint . (to validate your architecture)")
-	fmt.Println("  3. Review docs/arch-generated.md and docs/public-api-generated.md")
+	fmt.Println("  3. Review docs/arch-generated.md for full project documentation")
+
+	return nil
+}
+
+// Refresh updates an existing .goarchlint config with the latest preset version
+func Refresh(projectPath, preset string) error {
+	// Refresh the config
+	if err := RefreshConfigFromPreset(projectPath, preset); err != nil {
+		return err
+	}
+
+	// Determine the preset name for output
+	presetName := preset
+	if presetName == "" {
+		// Read config to get preset name
+		cfg, err := config.Load(projectPath)
+		if err == nil {
+			presetName = cfg.PresetUsed
+		}
+	}
+
+	if presetName != "" {
+		fmt.Printf("✓ Refreshed .goarchlint with '%s' preset (backup saved to .goarchlint.backup)\n", presetName)
+	} else {
+		fmt.Println("✓ Refreshed .goarchlint (backup saved to .goarchlint.backup)")
+	}
+
+	fmt.Println("\nℹ Note: Any custom modifications to .goarchlint have been overwritten.")
+	fmt.Println("ℹ If you had custom settings, restore them from .goarchlint.backup")
+	fmt.Println("\nNext steps:")
+	fmt.Println("  1. Review changes in .goarchlint")
+	fmt.Println("  2. Run: go-arch-lint . (to validate with updated config)")
+	fmt.Println("  3. Update documentation if needed: go-arch-lint docs")
 
 	return nil
 }

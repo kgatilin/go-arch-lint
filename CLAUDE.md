@@ -8,137 +8,173 @@ go-arch-lint is a Go architecture linter that enforces strict dependency rules b
 
 The project uses a strict 3-layer architecture with **complete isolation of internal packages**: `cmd → pkg → internal`, where `internal: []` means internal packages cannot import each other.
 
+## CRITICAL: Testing Requirements
+
+**⚠️ ALL TESTING MUST BE DONE THROUGH AUTOMATED TESTS - NEVER MANUAL COMMANDS ⚠️**
+
+When implementing any new functionality or making changes:
+
+### Testing Rules (NON-NEGOTIABLE)
+
+1. **NEVER use manual bash commands or temporary directories to test functionality**
+   - ❌ WRONG: `cd /tmp && mkdir test-project && ./go-arch-lint init`
+   - ✅ RIGHT: Write E2E test in `cmd/go-arch-lint/main_test.go`
+
+2. **ALL new CLI commands or flags MUST have E2E tests**
+   - E2E tests build the binary and run it as subprocess
+   - Test real-world usage: flags, exit codes, stdout/stderr
+   - Located in: `cmd/go-arch-lint/main_test.go`
+
+3. **ALL new business logic MUST have unit tests**
+   - Test individual functions and types in isolation
+   - Located in: `internal/*/` package tests
+
+4. **ALL new public API endpoints MUST have integration tests**
+   - Test multiple components working together
+   - Located in: `pkg/linter/linter_test.go`
+
+### Which Test Type to Use
+
+**Use E2E tests when:**
+- Adding new CLI commands (`init`, `refresh`, `docs`, etc.)
+- Adding new CLI flags (`--preset`, `--format`, etc.)
+- Testing user-facing behavior (exit codes, output format)
+- Testing error messages shown to users
+
+**Use Integration tests when:**
+- Testing `linter.Run()` or other public API functions
+- Testing workflows that span multiple internal packages
+- Testing with temporary file structures (configs, Go files)
+
+**Use Unit tests when:**
+- Testing individual functions in internal packages
+- Testing configuration parsing, graph building, validation logic
+- Testing output formatting
+
+### Example: Adding a New CLI Command
+
+```go
+// WRONG: Testing manually
+❌ cd /tmp && mkdir test && ./go-arch-lint newcommand
+
+// RIGHT: E2E test in cmd/go-arch-lint/main_test.go
+✅ func TestCLI_NewCommand(t *testing.T) {
+    binary := buildBinary(t)
+    tmpDir := t.TempDir()
+    // ... create test project ...
+    cmd := exec.Command(binary, "newcommand", ".")
+    cmd.Dir = tmpDir
+    output, err := cmd.CombinedOutput()
+    // ... assertions ...
+}
+```
+
+**Before any code is considered complete:**
+1. Write tests FIRST (or immediately after implementation)
+2. Run `go test ./...` - ALL tests must pass
+3. Run `./go-arch-lint .` - ZERO violations required
+4. Never commit code without corresponding tests
+
 ## Development Workflow: Using the Junior Developer Agent
 
-**IMPORTANT**: To maximize efficiency and speed, leverage the junior developer agent for implementing well-defined tasks. This is the recommended workflow for all development work on this project.
+The junior developer agent is available for **selective delegation** of straightforward, supplementary tasks. However, for most work on this project, **you should implement the core functionality yourself** and only delegate when it genuinely saves time.
 
-### The Workflow
+### When Delegation Makes Sense
 
-1. **Create a comprehensive implementation plan**: Analyze the requirements and create a detailed, step-by-step plan that includes:
-   - Architectural decisions you've made (e.g., "Use filepath.Match for glob patterns")
-   - Specific files to modify and what changes to make
-   - Exact function signatures, struct fields, and method names
-   - References to existing patterns to follow (e.g., "Follow the same pattern as GetIgnorePaths()")
-   - Test cases to write and edge cases to handle
-   - Order of implementation if there are dependencies
-2. **Hand over the complete plan to a single junior dev**: Use the Task tool with `subagent_type=junior-dev-executor` once, providing the entire comprehensive plan
-   - Give explicit, clear requirements for each change
-   - Point to existing code examples to follow
-   - Specify architectural constraints that must be maintained
-3. **Validate and review the implementation**: Once the junior dev completes the work, thoroughly review:
-   - Run `./go-arch-lint .` to verify zero violations
-   - Run `go test ./...` to ensure all tests pass
-   - Review code quality, naming conventions, and adherence to patterns
-   - Check that architectural constraints are maintained
-   - Verify edge cases are handled properly
-4. **Provide detailed feedback**: If issues are found, create specific, actionable feedback:
-   - Point out exactly what needs to be fixed
-   - Explain why it's a problem (architectural, style, correctness)
-   - Reference the correct pattern or approach to use
-5. **Iterate with the junior dev**: Hand the feedback back to the same junior dev to make corrections
-6. **Repeat the review cycle** until the implementation meets quality standards and all validations pass
+**Consider delegating to junior dev only when**:
+- You've already implemented the core functionality yourself
+- There are clear, mechanical supplementary tasks remaining (e.g., writing tests for code you just wrote)
+- The task is truly straightforward with no architectural ambiguity
+- Writing detailed instructions would take less time than doing the work yourself
+- You're confident the junior dev can execute without multiple review cycles
 
-### When to Use the Junior Dev Agent
+**Usually faster to do yourself**:
+- Core business logic implementation
+- Anything requiring architectural understanding
+- Changes touching multiple internal packages
+- First-time implementation of a pattern
+- Tasks where you'd spend more time explaining than implementing
 
-**DO use the junior dev for** (after YOU create the comprehensive plan):
-- Implementing simple features with clear requirements across multiple files (e.g., add config field, update scanner logic, write tests)
-- Writing basic unit tests for straightforward functionality
-- Adding struct fields with simple accessor methods (following existing patterns)
-- Updating configuration structures (adding fields, parsing logic)
-- Simple refactoring within a single package (renaming, extracting methods)
-- Adding validation logic with known requirements and clear error messages
-- Fixing minor bugs with obvious solutions
-- Creating utility/helper functions
-- Updating documentation for simple changes
-- Any well-scoped implementation where YOU have already made all architectural decisions
+### Split-Work Approach (Recommended)
 
-**DO NOT use the junior dev for**:
-- Creating adapter types in pkg/linter (architectural, requires understanding DIP and slice covariance)
-- Architectural planning or design decisions (YOU must make these first)
-- Complex refactoring that affects multiple packages
-- Investigating bugs without clear root cause
-- Research or exploration tasks
-- Changes that modify interfaces between internal packages
-- Performance optimization requiring profiling or deep analysis
-- Tasks where requirements are unclear or incomplete (clarify first, then delegate)
+When you do delegate, split the work intelligently:
+
+1. **YOU implement the main code**:
+   - Make architectural decisions
+   - Write the core business logic
+   - Add struct fields, methods, and main functionality
+   - Update internal packages with domain logic
+   - Create adapters in pkg/linter if needed
+
+2. **OPTIONALLY delegate supplementary work** to junior dev:
+   - Write unit tests for the code you just implemented
+   - Add simple accessor methods following exact patterns you've established
+   - Update documentation to reflect changes
+   - Add error messages or validation for straightforward cases
+
+### Delegation Workflow (When You Choose to Use It)
+
+1. **Implement core functionality yourself first**
+2. **Identify truly straightforward supplementary tasks** (e.g., "write tests for this function")
+3. **Delegate with full context** - provide the code you wrote, the patterns to follow, exact requirements
+4. **Review the result** - validate tests pass, code quality is good
+5. **Fix issues yourself if faster** than iterating with junior dev
 
 ### Example Workflow
 
 ```
 User: Add support for excluding specific files from scanning
 
-Senior Claude (Planning Phase):
-1. Analyzes: Need to add ExcludePatterns to Config, update scanner to filter files
-2. Identifies architectural impact: Pattern matching approach needed
-3. Makes architectural decisions:
-   - Use filepath.Match for glob patterns (simple, stdlib)
-   - Add to both Config struct and YAML parsing
-   - Filter in Scanner.Scan() before creating FileInfo
-4. Creates comprehensive plan with explicit requirements:
+Senior Claude (Implementation):
+1. Decides: Use filepath.Match for glob patterns
+2. Implements main functionality myself:
 
-   IMPLEMENTATION PLAN:
+   A. Add to internal/config/config.go:
+      - Add `ExcludePatterns []string` field with yaml tag `exclude_patterns`
+      - Add `func (c *Config) GetExcludePatterns() []string` method
 
-   A. Modify internal/config/config.go:
-      - Add `ExcludePatterns []string` field to Config struct (add yaml tag: `exclude_patterns`)
-      - Add method: `func (c *Config) GetExcludePatterns() []string`
-        (follow exact pattern of existing GetIgnorePaths() method)
+   B. Update internal/scanner/scanner.go:
+      - Modify Scanner.Scan() to check exclude patterns
+      - Use filepath.Match(pattern, relPath)
+      - Skip files that match, handle errors
 
-   B. Modify internal/scanner/scanner.go:
-      - In Scanner.Scan() method, after getting file path, check against exclude patterns
-      - Use filepath.Match(pattern, relPath) for matching
-      - Skip file if any pattern matches (continue the walk loop)
-      - Handle filepath.Match errors (bad pattern) by logging/skipping
+   C. Run `./go-arch-lint .` → ✓ Zero violations
 
-   C. Write tests in internal/config/config_test.go:
-      - Test loading exclude_patterns from YAML
+3. Evaluate: Should I delegate test writing?
+   - Tests are mechanical: check YAML loading, pattern matching
+   - I can specify exactly what to test
+   - Decision: YES, delegate tests to junior dev
+
+Senior Claude (Delegation - Optional):
+→ Delegates test writing to junior dev:
+   "I've implemented exclude pattern functionality in internal/config and internal/scanner.
+
+   Please write tests:
+
+   1. In internal/config/config_test.go:
+      - Test loading exclude_patterns from YAML (follow pattern in existing tests)
       - Test GetExcludePatterns() returns correct values
       - Test with empty exclude_patterns
 
-   D. Write tests in internal/scanner/scanner_test.go:
-      - Test that files matching exclude patterns are skipped
-      - Test with glob patterns like "*.txt", "*_test.go", "vendor/*"
-      - Test that non-matching files are still scanned
-      - Test with multiple patterns
+   2. In internal/scanner/scanner_test.go:
+      - Test files matching patterns are skipped: "*.txt", "*_test.go", "vendor/*"
+      - Test non-matching files are still scanned
+      - Test multiple patterns work
+      - Test invalid glob pattern like "[invalid" is handled gracefully
 
-   CONSTRAINTS:
-   - Must maintain zero violations when running `./go-arch-lint .`
-   - internal/scanner CANNOT import internal/config (use structural typing)
-   - Follow existing code style and patterns exactly
+   Reference the existing test patterns in both files."
 
-Senior Claude (Execution):
-→ Delegates entire plan to ONE junior dev with all details
-→ Junior dev implements all changes (A, B, C, D)
+→ Junior dev writes tests
 
-Senior Claude (Review - Iteration 1):
-→ Runs `./go-arch-lint .` → ✓ Zero violations
-→ Runs `go test ./...` → ✓ All tests pass
-→ Reviews code → Found issues:
-   - ExcludePatterns field has wrong YAML tag (`exclude` instead of `exclude_patterns`)
-   - Missing edge case: empty string pattern should be skipped
-   - Test coverage: missing test for bad glob pattern (e.g., "[invalid")
-
-Senior Claude (Feedback):
-→ Provides specific feedback to junior dev:
-   "Please fix these three issues:
-   1. Change YAML tag from `exclude` to `exclude_patterns`
-   2. In Scanner.Scan(), skip empty patterns before calling filepath.Match
-   3. Add test case for invalid glob pattern in scanner_test.go"
-
-→ Junior dev makes corrections
-
-Senior Claude (Review - Iteration 2):
-→ Runs validations again → ✓ All pass
-→ Reviews fixes → ✓ All issues resolved
-→ APPROVED: Implementation complete
+Senior Claude (Review):
+→ Runs `go test ./...` → ✓ All pass
+→ Reviews tests → ✓ Good coverage
+→ DONE (or fix minor issues myself if faster than iterating)
 ```
 
-### Benefits
+### Key Principle
 
-- **Speed**: Junior dev handles all implementation work in one go, senior focuses on planning and review
-- **Focus**: Senior agent focuses on architecture and design, junior dev handles coding
-- **Quality**: Iterative review cycles ensure high-quality implementation aligned with patterns
-- **Efficiency**: Reduces senior agent token usage by delegating implementation details
-- **Thoroughness**: Comprehensive upfront planning leads to better first-pass implementation
+**Default to doing it yourself.** Only delegate when you're certain it saves time. The overhead of explaining, reviewing, and potentially iterating often exceeds the cost of just implementing it yourself.
 
 **Remember**: Always validate that `./go-arch-lint .` shows zero violations after any changes. The self-validation requirement is non-negotiable.
 
@@ -387,6 +423,8 @@ Each internal package is a **completely isolated primitive** with a single respo
 
 ## Testing Strategy
 
+**⚠️ REMINDER: See "CRITICAL: Testing Requirements" section above - ALL testing MUST be done through automated tests, NEVER manual bash commands! ⚠️**
+
 ### Three Levels of Testing
 
 1. **Unit Tests** (`internal/*/` packages)
@@ -504,6 +542,8 @@ The tool validates 5 types of architectural violations:
 
 ## Common Pitfalls
 
+❌ **Testing manually with bash commands** - NEVER use `cd /tmp && ./go-arch-lint test`. ALWAYS write E2E/integration/unit tests. See "CRITICAL: Testing Requirements" section.
+
 ❌ **Importing between internal packages** - Will create violations. Use interfaces instead.
 
 ❌ **Trying to pass `[]ConcreteType` as `[]InterfaceType`** - Go doesn't support this. Create adapters.
@@ -514,12 +554,24 @@ The tool validates 5 types of architectural violations:
 
 ❌ **Adding business logic to pkg/linter or cmd/** - Domain logic belongs in `internal/` packages only.
 
+❌ **Committing code without tests** - Every new feature needs corresponding automated tests. No exceptions.
+
 ## Before Committing
 
-1. **Run tests**: `go test ./...` (ensure test coverage stays at 70-80%+)
-2. **Rebuild if needed**: `go build -o go-arch-lint ./cmd/go-arch-lint`
-3. **Run linter on itself**: `./go-arch-lint .` (must show zero violations)
-4. **Update generated documentation** (if changes affect architecture, public API, CLI flags, or usage):
+**CHECKLIST (All items mandatory):**
+
+1. **✅ Tests written**: Every new feature/change MUST have corresponding tests
+   - CLI commands → E2E tests in `cmd/go-arch-lint/main_test.go`
+   - Public API → Integration tests in `pkg/linter/linter_test.go`
+   - Internal logic → Unit tests in `internal/*/` packages
+
+2. **✅ All tests pass**: `go test ./...` (ensure test coverage stays at 70-80%+)
+
+3. **✅ Zero violations**: `./go-arch-lint .` (must show zero violations)
+
+4. **✅ Binary builds**: `go build -o go-arch-lint ./cmd/go-arch-lint`
+
+5. **✅ Update generated documentation** (if changes affect architecture, public API, CLI flags, or usage):
    ```bash
    # Simplest: Generate comprehensive documentation
    ./go-arch-lint docs
@@ -528,13 +580,20 @@ The tool validates 5 types of architectural violations:
    ./go-arch-lint -detailed -format=markdown . > docs/arch-generated.md 2>&1
    ./go-arch-lint -format=api . > docs/public-api-generated.md 2>&1
    ```
-5. **Update README.md** (if changes affect usage, flags, configuration, or examples):
+
+6. **✅ Update README.md** (if changes affect usage, flags, configuration, or examples):
    - Update flags section if new CLI options were added
    - Update examples if new usage patterns are introduced
    - Update output examples if format changed
    - Keep README aligned with actual tool behavior
-6. **Verify alignment**: Check that new public APIs and dependencies align with @docs/architecture.md
-7. If you added new domain logic, ensure it's in an `internal/` package
-8. If you modified interfaces, update adapters in `pkg/linter/linter.go` and test files
 
-This architecture is intentionally strict to serve as a proof-of-concept. The zero-violation requirement is non-negotiable.
+7. **✅ Verify alignment**: Check that new public APIs and dependencies align with @docs/architecture.md
+
+8. **✅ Architecture compliance**:
+   - New domain logic is in an `internal/` package
+   - Modified interfaces have updated adapters in `pkg/linter/linter.go` and test files
+   - No internal package imports other internal packages
+
+**This architecture is intentionally strict to serve as a proof-of-concept. The zero-violation requirement is non-negotiable.**
+
+**NEVER commit code without tests. NEVER test manually with bash commands. ALWAYS write automated tests.**
