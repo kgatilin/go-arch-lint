@@ -14,6 +14,15 @@ type Config struct {
 	IgnorePaths []string            `yaml:"ignore_paths"`
 	Structure   Structure           `yaml:"structure"`
 	Rules       Rules               `yaml:"rules"`
+	PresetUsed  string              `yaml:"preset_used,omitempty"`
+	ErrorPrompt ErrorPrompt         `yaml:"error_prompt,omitempty"`
+}
+
+type ErrorPrompt struct {
+	Enabled             bool     `yaml:"enabled"`
+	ArchitecturalGoals  string   `yaml:"architectural_goals,omitempty"`
+	Principles          []string `yaml:"principles,omitempty"`
+	RefactoringGuidance string   `yaml:"refactoring_guidance,omitempty"`
 }
 
 type Structure struct {
@@ -44,6 +53,16 @@ func (c *Config) GetRequiredDirectories() map[string]string {
 // ShouldAllowOtherDirectories returns whether non-required directories are allowed
 func (c *Config) ShouldAllowOtherDirectories() bool {
 	return c.Structure.AllowOtherDirectories
+}
+
+// GetPresetUsed returns the name of the preset used to create this config
+func (c *Config) GetPresetUsed() string {
+	return c.PresetUsed
+}
+
+// GetErrorPrompt returns the architectural context for error messages
+func (c *Config) GetErrorPrompt() ErrorPrompt {
+	return c.ErrorPrompt
 }
 
 // Load reads and parses the .goarchlint configuration file
