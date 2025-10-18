@@ -529,7 +529,6 @@ The tool validates 5 types of architectural violations:
 - **pkg/linter/linter.go** - All adapters live here, the heart of dependency inversion
 - **.goarchlint** - Configuration for this project (strict mode: `internal: []`)
 - **README.md** - User-facing documentation with usage, flags, examples, and configuration
-- **@docs/architecture.md** - Comprehensive guide to the architecture principles
 - **@docs/arch-generated.md** - Generated architecture documentation with method-level details (proof of zero violations)
 
 ## What Makes This Architecture Work
@@ -587,7 +586,7 @@ The tool validates 5 types of architectural violations:
    - Update output examples if format changed
    - Keep README aligned with actual tool behavior
 
-7. **✅ Verify alignment**: Check that new public APIs and dependencies align with @docs/architecture.md
+7. **✅ Verify alignment**: Check that new public APIs and dependencies align with @docs/arch_generated.md
 
 8. **✅ Architecture compliance**:
    - New domain logic is in an `internal/` package

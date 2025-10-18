@@ -960,3 +960,203 @@ go 1.21
 		t.Error("did not expect docs/public-api-generated.md to be created (should be in single file now)")
 	}
 }
+
+func TestCLI_Help(t *testing.T) {
+	binary := buildBinary(t)
+
+	testCases := []struct {
+		name string
+		args []string
+	}{
+		{"help command", []string{"help"}},
+		{"--help flag", []string{"--help"}},
+		{"-h flag", []string{"-h"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := exec.Command(binary, tc.args...)
+			output, err := cmd.CombinedOutput()
+
+			// Should exit with code 0
+			if err != nil {
+				t.Errorf("expected exit code 0, got error: %v\nOutput: %s", err, output)
+			}
+
+			outputStr := string(output)
+
+			// Verify key sections are present
+			expectedSections := []string{
+				"go-arch-lint - Go architecture linter",
+				"USAGE:",
+				"COMMANDS:",
+				"DEFAULT COMMAND FLAGS:",
+				"INIT COMMAND:",
+				"REFRESH COMMAND:",
+				"DOCS COMMAND:",
+				"EXAMPLES:",
+				"EXIT CODES:",
+			}
+
+			for _, section := range expectedSections {
+				if !strings.Contains(outputStr, section) {
+					t.Errorf("expected help output to contain '%s'\nGot: %s", section, outputStr)
+				}
+			}
+
+			// Verify key commands are documented
+			expectedCommands := []string{
+				"init",
+				"refresh",
+				"docs",
+				"help",
+			}
+
+			for _, cmd := range expectedCommands {
+				if !strings.Contains(outputStr, cmd) {
+					t.Errorf("expected help output to mention command '%s'", cmd)
+				}
+			}
+
+			// Verify key flags are documented
+			expectedFlags := []string{
+				"-format",
+				"-detailed",
+				"-exit-zero",
+				"-strict",
+				"-preset",
+				"-create-dirs",
+			}
+
+			for _, flag := range expectedFlags {
+				if !strings.Contains(outputStr, flag) {
+					t.Errorf("expected help output to mention flag '%s'", flag)
+				}
+			}
+		})
+	}
+}
+
+// TestCLI_RequireBlackboxTests tests that the CLI detects whitebox tests
+func TestCLI_RequireBlackboxTests(t *testing.T) {
+	binary := buildBinary(t)
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create .goarchlint with require_blackbox enabled
+	configYAML := `scan_paths:
+  - internal
+
+structure:
+  required_directories:
+    internal: "Internal packages"
+  allow_other_directories: true
+
+rules:
+  directories_import:
+    internal: []
+  detect_unused: false
+  test_files:
+    lint: true
+    require_blackbox: true
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create internal package with code
+	internalDir := filepath.Join(tmpDir, "internal", "app")
+	if err := os.MkdirAll(internalDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	appGo := `package app
+
+func Process() string {
+	return "processed"
+}
+`
+	if err := os.WriteFile(filepath.Join(internalDir, "app.go"), []byte(appGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create WHITEBOX test (should violate)
+	whiteboxTestGo := `package app
+
+import "testing"
+
+func TestProcess(t *testing.T) {
+	result := Process()
+	if result != "processed" {
+		t.Fail()
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(internalDir, "app_test.go"), []byte(whiteboxTestGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run binary
+	cmd := exec.Command(binary, ".")
+	cmd.Dir = tmpDir
+	output, err := cmd.CombinedOutput()
+
+	// Should fail with exit code 1 due to whitebox test violation
+	if err == nil {
+		t.Error("expected non-zero exit code due to whitebox test violation")
+	}
+
+	exitErr, ok := err.(*exec.ExitError)
+	if !ok {
+		t.Fatalf("expected ExitError, got: %v", err)
+	}
+
+	if exitErr.ExitCode() != 1 {
+		t.Errorf("expected exit code 1, got %d", exitErr.ExitCode())
+	}
+
+	outputStr := string(output)
+
+	// Should contain whitebox test violation
+	if !strings.Contains(outputStr, "Whitebox Test") {
+		t.Error("expected output to contain 'Whitebox Test' violation")
+	}
+
+	// Should mention the whitebox test file
+	if !strings.Contains(outputStr, "internal/app/app_test.go") {
+		t.Error("expected violation for internal/app/app_test.go")
+	}
+
+	// Should mention the expected package name
+	if !strings.Contains(outputStr, "app_test") {
+		t.Error("expected violation to suggest package name 'app_test'")
+	}
+
+	// Should contain educational prompt about WHY blackbox testing matters
+	expectedEducationalContent := []string{
+		"WHY THIS MATTERS",
+		"public API",
+		"internal implementation",
+		"public interface",
+		"Go best practice",
+	}
+
+	for _, content := range expectedEducationalContent {
+		if !strings.Contains(outputStr, content) {
+			t.Errorf("expected output to contain educational content: '%s'", content)
+		}
+	}
+
+	// Should provide actionable fix guidance
+	if !strings.Contains(outputStr, "After changing to blackbox testing") {
+		t.Error("expected output to contain fix guidance")
+	}
+}

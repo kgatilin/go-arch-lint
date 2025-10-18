@@ -4,25 +4,25 @@ import (
 	"testing"
 
 	"github.com/kgatilin/go-arch-lint/internal/graph"
-	"github.com/kgatilin/go-arch-lint/internal/scanner"
 )
 
-// Helper to convert []scanner.FileInfo to []graph.FileInfo (slice covariance workaround)
-func toGraphFiles(files []scanner.FileInfo) []graph.FileInfo {
-	result := make([]graph.FileInfo, len(files))
-	for i := range files {
-		result[i] = files[i]
-	}
-	return result
+// testFileInfo implements graph.FileInfo interface for testing
+type testFileInfo struct {
+	relPath string
+	pkg     string
+	imports []string
 }
 
+func (t testFileInfo) GetRelPath() string  { return t.relPath }
+func (t testFileInfo) GetPackage() string  { return t.pkg }
+func (t testFileInfo) GetImports() []string { return t.imports }
+
 func TestBuild_LocalAndExternalImports(t *testing.T) {
-	files := []scanner.FileInfo{
-		{
-			Path:    "/project/pkg/service/service.go",
-			RelPath: "pkg/service/service.go",
-			Package: "service",
-			Imports: []string{
+	files := []graph.FileInfo{
+		testFileInfo{
+			relPath: "pkg/service/service.go",
+			pkg:     "service",
+			imports: []string{
 				"fmt",
 				"github.com/test/project/internal/types",
 				"github.com/external/lib",
@@ -30,7 +30,7 @@ func TestBuild_LocalAndExternalImports(t *testing.T) {
 		},
 	}
 
-	g := graph.Build(toGraphFiles(files), "github.com/test/project")
+	g := graph.Build(files, "github.com/test/project")
 
 	if len(g.Nodes) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(g.Nodes))
@@ -97,22 +97,22 @@ func TestIsStdLib(t *testing.T) {
 }
 
 func TestGetLocalPackages(t *testing.T) {
-	files := []scanner.FileInfo{
-		{
-			RelPath: "pkg/service/service.go",
-			Package: "service",
+	files := []graph.FileInfo{
+		testFileInfo{
+			relPath: "pkg/service/service.go",
+			pkg:     "service",
 		},
-		{
-			RelPath: "pkg/service/handler.go",
-			Package: "service",
+		testFileInfo{
+			relPath: "pkg/service/handler.go",
+			pkg:     "service",
 		},
-		{
-			RelPath: "internal/types/types.go",
-			Package: "types",
+		testFileInfo{
+			relPath: "internal/types/types.go",
+			pkg:     "types",
 		},
 	}
 
-	g := graph.Build(toGraphFiles(files), "github.com/test/project")
+	g := graph.Build(files, "github.com/test/project")
 	packages := g.GetLocalPackages()
 
 	if len(packages) != 2 {

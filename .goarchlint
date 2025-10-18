@@ -1,28 +1,69 @@
-# go-arch-lint configuration for this project
-#
-# This meta-tool follows its own strict architectural rules with ZERO violations.
-# The architecture demonstrates:
-# - Strict unidirectional dependency flow: cmd → pkg → internal
-# - Dependency Inversion Principle: internal packages define interfaces, pkg contains adapters
-# - Complete isolation of internal packages (internal: [])
-#
-# See docs/architecture.md for detailed explanation of the design principles.
+# Refreshed by go-arch-lint refresh with preset=simple
+# Previous config backed up to .goarchlint.backup
+# You can customize the error_prompt section to fit your project's needs
 
-# Project structure
+module: github.com/kgatilin/go-arch-lint
+preset_used: simple
+error_prompt:
+  enabled: true
+  architectural_goals: |4
+        Simple Go architecture aims to:
+        - Separate public APIs (pkg) from private implementation (internal)
+        - Keep command-line entry points minimal and focused
+        - Enable code reuse through public packages
+        - Protect internal implementation details from external use
+  principles:
+    - cmd contains only application entry points and CLI logic
+    - pkg contains public libraries that could be imported by other projects
+    - internal contains private code that cannot be imported externally (Go compiler enforces this)
+    - "Dependencies flow: cmd → pkg → internal"
+    - internal packages should have zero dependencies on each other for maximum isolation
+  refactoring_guidance: |4
+        To refactor toward simple architecture compliance:
+
+        1. **Consolidate entry points in cmd/**: Move main.go files and CLI setup to cmd/
+        2. **Extract reusable code to pkg/**: Code that provides public APIs or could be used by other projects goes in pkg/
+        3. **Move private implementation to internal/**: Implementation details, domain logic, and internal utilities belong in internal/
+        4. **Break internal coupling**: If internal packages import each other:
+           - Define interfaces in the importing package
+           - Use adapters in pkg/ to bridge between internal packages
+           - Consider if packages are too granular and should be merged
+
+        Example refactoring:
+        - Before: internal/users/service.go imports internal/database directly
+        - After: internal/users/service.go defines UserRepository interface, pkg/app/app.go creates adapter, internal/database implements interface
 structure:
   required_directories:
-    cmd: "Command-line entry points"
-    pkg: "Public API and orchestration layer with adapters"
-    internal: "Domain primitives with complete isolation"
+    cmd: Application entry points
+    internal: Private application code
+    pkg: Public libraries and APIs
   allow_other_directories: true
-
-# Validation rules
 rules:
-  # Define what each directory type can import
   directories_import:
-    cmd: [pkg] # cmd is the wiring layer, imports business logic and primitives
-    pkg: [internal] # pkg can import internal primitives and other pkg for pragmatic reasons
-    internal: [] # internal packages are primitives with no dependencies
-
-  # Detect unused packages (packages not transitively imported by cmd)
-  detect_unused: false # Disabled for this meta-tool to avoid self-referential issues
+    cmd:
+      - pkg
+    internal: []
+    pkg:
+      - internal
+  detect_unused: true
+  shared_external_imports:
+    detect: true
+    mode: warn
+    exclusions:
+      - fmt
+      - strings
+      - errors
+      - time
+      - context
+      - gopkg.in/yaml.v3
+    exclusion_patterns:
+      - encoding/*
+  test_files:
+    lint: true
+    exempt_imports:
+      - testing
+      - github.com/stretchr/testify/assert
+      - github.com/stretchr/testify/require
+      - github.com/stretchr/testify/mock
+    location: colocated
+    require_blackbox: false  # This project intentionally uses whitebox tests for internal packages

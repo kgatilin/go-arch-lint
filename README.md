@@ -173,7 +173,7 @@ rules:
   # Detect unused packages (packages not transitively imported by cmd)
   detect_unused: true
 
-  # Detect shared external imports (NEW!)
+  # Detect shared external imports
   shared_external_imports:
     detect: true              # Enable detection
     mode: warn                # "warn" (report only) or "error" (fail build)
@@ -185,6 +185,19 @@ rules:
     exclusion_patterns:       # Glob patterns to allow
       - encoding/*            # All encoding/* packages
       - golang.org/x/*        # All golang.org/x/* packages
+
+  # Test file linting (NEW!)
+  test_files:
+    lint: true                # Enable linting of *_test.go files (default: false)
+    location: colocated       # Where tests should be located (default: "colocated")
+                              # Options: "colocated" (next to code), "separate" (in tests/ dir), "any" (no restriction)
+    require_blackbox: true    # Require blackbox tests (package foo_test) instead of whitebox (package foo)
+                              # When enabled, test files must use package name with _test suffix (default: false)
+    exempt_imports:          # Packages test files can import regardless of layer rules
+      - testing
+      - github.com/stretchr/testify/assert
+      - github.com/stretchr/testify/require
+      - github.com/stretchr/testify/mock
 ```
 
 **Customizable Error Context**: When using presets, the `error_prompt` section is automatically populated with architectural guidance. You can:
@@ -270,6 +283,196 @@ rules:
 - Catches when layers bypass abstraction boundaries
 - Self-documenting: exclusion list becomes a catalog of approved utilities
 - Gradual adoption: warn mode allows incremental fixing
+
+### Test File Linting
+
+By default, `go-arch-lint` only validates production code (files not ending in `_test.go`). You can optionally enforce architectural rules on test files to ensure tests follow the same clean architecture principles.
+
+**Use Case**: Prevent test files from bypassing architectural boundaries. For example, in a DDD project, `cmd` tests should not import `internal/domain` directly, but should go through the `internal/app` service layer just like production code.
+
+**Configuration:**
+```yaml
+rules:
+  test_files:
+    lint: true  # Enable test file linting (default: false)
+    exempt_imports:
+      - testing
+      - github.com/stretchr/testify/assert
+      - github.com/stretchr/testify/require
+      - github.com/stretchr/testify/mock
+```
+
+**When Enabled:**
+- Test files (`*_test.go`) are scanned and validated against the same architectural rules as production code
+- Test files are treated as part of their package's layer (e.g., `cmd/service/handler_test.go` is in the `cmd` layer)
+- `exempt_imports` list specifies packages that test files are allowed to import regardless of layer rules (typically test frameworks)
+
+#### Black-Box Testing Support
+
+**Black-box tests** (test files with `package <name>_test`) are **automatically allowed to import their parent package** without triggering violations. This supports the Go best practice of testing packages through their public API.
+
+**How it Works:**
+- Test files ending with `_test.go` AND package name ending with `_test` are detected as black-box tests
+- Parent package imports are **exempted** from architectural rules
+- Other imports are still validated according to normal architecture rules
+
+**Example:**
+```go
+// File: internal/app/processor_test.go
+package app_test  // Black-box test (package name ends with _test)
+
+import (
+    "testing"
+    "github.com/yourproject/internal/app"  // ✓ Exempted - parent package import
+)
+
+func TestProcess(t *testing.T) {
+    result := app.Process("input")  // Testing public API only
+    // ...
+}
+```
+
+**Why This Matters:**
+- **Enables API testing**: Black-box tests ensure you're testing through the public interface
+- **Follows Go conventions**: The Go community recommends using `package <name>_test` for public API testing
+- **Avoids false positives**: Without this exemption, black-box tests would trigger violations in strict architectures (like `internal: []`)
+
+**White-box vs. Black-box Tests:**
+| Type | Package Declaration | Parent Package Import | Other Local Imports | Access to | Use Case |
+|------|--------------------|-----------------------|---------------------|-----------|----------|
+| **White-box** | `package app` | No need (same package) | Subject to architecture rules | All code (including unexported) | Testing implementation details |
+| **Black-box** | `package app_test` | **Exempted from rules** | Subject to architecture rules | Only exported API | Testing public API |
+
+**Example - No Violation (Black-box test importing parent):**
+```go
+// File: internal/app/processor_test.go
+package app_test
+
+import (
+    "github.com/yourproject/internal/app"  // ✓ No violation - parent package exempted
+)
+```
+
+**Example - Still Validates Other Imports:**
+```go
+// File: internal/app/processor_test.go
+package app_test
+
+import (
+    "github.com/yourproject/internal/app"     // ✓ Exempted
+    "github.com/yourproject/internal/config"  // ✗ May violate if internal:[] rule exists
+)
+```
+
+If the architecture rules specify `internal: []` (internal packages can't import each other), the import of `internal/config` would still trigger a violation, but the parent package import (`internal/app`) is exempted.
+
+#### Enforcing Blackbox Tests
+
+You can enforce that all test files use blackbox testing (with `_test` package suffix) to ensure tests only use the public API.
+
+**Configuration:**
+```yaml
+rules:
+  test_files:
+    lint: true
+    require_blackbox: true  # Require all tests to be blackbox tests
+```
+
+**When Enabled:**
+- All test files (`*_test.go`) must use package name with `_test` suffix
+- Test files using the same package as the code (whitebox tests) will trigger violations
+- Encourages testing through public APIs rather than implementation details
+
+**Example - Violation:**
+```go
+// File: internal/app/processor_test.go
+package app  // ✗ Violation: whitebox test (should be app_test)
+
+import "testing"
+
+func TestProcess(t *testing.T) {
+    // Can access unexported functions, but violates require_blackbox rule
+}
+```
+
+**Example - Compliant:**
+```go
+// File: internal/app/processor_test.go
+package app_test  // ✓ Blackbox test (package name ends with _test)
+
+import (
+    "testing"
+    "github.com/yourproject/internal/app"
+)
+
+func TestProcess(t *testing.T) {
+    result := app.Process("input")  // Testing through public API
+    // ...
+}
+```
+
+**Why Use This:**
+- **Enforces API testing**: Ensures tests validate the public interface, not implementation details
+- **Encourages better design**: If you can't test through the public API, it may indicate design issues
+- **Reduces coupling**: Tests won't break when internal implementation changes
+- **Follows Go best practices**: The Go community recommends blackbox testing for package-level tests
+
+**Note**: This rule is enabled by default in all presets (DDD, Simple, Hexagonal). Disable it by setting `require_blackbox: false` if you need whitebox testing.
+
+#### Test File Location Policy
+
+Control where test files should be located in your project.
+
+**Configuration:**
+```yaml
+rules:
+  test_files:
+    lint: true
+    location: colocated  # Options: "colocated", "separate", "any"
+```
+
+**Location Policies:**
+
+| Policy | Requirement | Example | Use Case |
+|--------|-------------|---------|----------|
+| **`colocated`** (default) | Tests must be in the same directory as the code they test | `internal/app/processor.go`<br/>`internal/app/processor_test.go` | Most Go projects (Go convention) |
+| **`separate`** | Tests must be in a `tests/` directory | `internal/app/processor.go`<br/>`tests/internal/app/processor_test.go` | Projects preferring separate test directories |
+| **`any`** | Tests can be anywhere | No restrictions | Legacy projects or mixed approaches |
+
+**Example Violations:**
+
+**Colocated policy violation:**
+```
+[ERROR] Test File Wrong Location
+  File: tests/internal/app/processor_test.go
+  Issue: Test file is in separate tests/ directory
+  Rule: Test files should be colocated with the code they test (location: colocated)
+  Fix: Move test file to the same directory as the code it tests
+```
+
+**Separate policy violation:**
+```
+[ERROR] Test File Wrong Location
+  File: internal/app/processor_test.go
+  Issue: Test file is colocated with code instead of in tests/ directory
+  Rule: Test files should be in a separate tests/ directory (location: separate)
+  Fix: Move test file to tests/ directory mirroring the source structure
+```
+
+**Why This Matters:**
+- **Enforces consistency**: All tests follow the same organizational pattern
+- **Matches Go conventions**: The `colocated` policy follows standard Go project layout
+- **Supports preferences**: Teams can choose their preferred test organization style
+
+**Gradual Adoption:**
+1. Start with `lint: false` (default) - test files are ignored
+2. Enable `lint: true` to discover violations
+3. Refactor tests to follow architectural boundaries
+4. Use black-box tests (`package <name>_test`) to test public APIs
+5. Set `location` policy to enforce test organization
+6. Keep enforcement enabled to prevent future violations
+
+**All presets include test file linting enabled by default** with `location: colocated` and sensible `exempt_imports` for common test frameworks. You can disable it or customize the settings in your `.goarchlint` file.
 
 ## Architecture Rules
 

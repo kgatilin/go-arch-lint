@@ -9,14 +9,127 @@ import (
 	"github.com/kgatilin/go-arch-lint/pkg/linter"
 )
 
+func printHelp() {
+	fmt.Println(`go-arch-lint - Go architecture linter that enforces strict dependency rules
+
+USAGE:
+    go-arch-lint [command] [flags] [path]
+
+COMMANDS:
+    (default)         Validate architecture and check for violations
+    init              Initialize .goarchlint config with a preset
+    refresh           Refresh error_prompt section from preset (keeps custom rules)
+    docs              Generate comprehensive architecture documentation
+    help              Show this help message
+
+DEFAULT COMMAND FLAGS:
+    -format string
+        Output format (default: violations only)
+        Options:
+          markdown  - Dependency graph in markdown
+          api       - Public API documentation
+          full      - Complete documentation (structure + rules + deps + API)
+
+    -detailed
+        Show detailed method-level dependencies (use with -format=markdown)
+
+    -exit-zero
+        Always exit with code 0, even if violations are found
+
+    -strict (default: true)
+        Fail (exit code 1) on any violations
+
+INIT COMMAND:
+    go-arch-lint init [flags] [path]
+
+    Initialize a new project with .goarchlint configuration file.
+
+    Flags:
+        -preset string
+            Preset to use: ddd, simple, hexagonal, custom
+            If not specified, shows interactive menu
+
+        -create-dirs (default: true)
+            Automatically create required directories defined in preset
+
+    Examples:
+        go-arch-lint init                      # Interactive preset selection
+        go-arch-lint init --preset=ddd         # Use Domain-Driven Design preset
+        go-arch-lint init --preset=hexagonal   # Use Hexagonal Architecture preset
+
+REFRESH COMMAND:
+    go-arch-lint refresh [flags] [path]
+
+    Refresh the error_prompt section from the current or new preset.
+    Preserves your custom architectural rules.
+
+    Flags:
+        -preset string
+            Switch to a different preset (optional)
+            If not specified, refreshes with the same preset
+
+    Examples:
+        go-arch-lint refresh                   # Refresh with current preset
+        go-arch-lint refresh --preset=ddd      # Switch to different preset
+
+DOCS COMMAND:
+    go-arch-lint docs [flags] [path]
+
+    Generate comprehensive architecture documentation.
+
+    Flags:
+        -output string (default: "docs/arch-generated.md")
+            Output file path for generated documentation
+
+    Examples:
+        go-arch-lint docs                                  # Generate to docs/arch-generated.md
+        go-arch-lint docs --output=ARCHITECTURE.md         # Custom output location
+
+EXAMPLES:
+    # Validate current directory
+    go-arch-lint .
+
+    # Show dependency graph
+    go-arch-lint -format=markdown .
+
+    # Show detailed method-level dependencies
+    go-arch-lint -detailed -format=markdown .
+
+    # Generate full documentation
+    go-arch-lint -format=full .
+
+    # Show public API
+    go-arch-lint -format=api .
+
+    # Check violations but don't fail CI
+    go-arch-lint -exit-zero .
+
+EXIT CODES:
+    0 - No violations found (or -exit-zero flag used)
+    1 - Violations found
+    2 - Error occurred (invalid config, file not found, etc.)
+
+For more information, visit: https://github.com/kgatilin/go-arch-lint`)
+}
+
+func printUsage() {
+	fmt.Println("Usage: go-arch-lint [flags] [path]")
+	fmt.Println("\nFor detailed help, run: go-arch-lint help")
+	fmt.Println("\nFlags:")
+	flag.PrintDefaults()
+}
+
 func main() {
 	os.Exit(run())
 }
 
 func run() int {
-	// Check for subcommands before parsing flags
+	// Check for help flags or subcommands before parsing flags
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "-h", "--help", "help":
+			printHelp()
+			return 0
 		case "init":
 			return runInit()
 		case "refresh":
@@ -27,10 +140,11 @@ func run() int {
 	}
 
 	// Parse flags
-	formatFlag := flag.String("format", "", "Output format for dependency graph (markdown, api)")
-	detailedFlag := flag.Bool("detailed", false, "Show detailed method-level dependencies")
-	strictFlag := flag.Bool("strict", true, "Fail on any violations")
-	exitZeroFlag := flag.Bool("exit-zero", false, "Don't fail on violations")
+	flag.Usage = printUsage
+	formatFlag := flag.String("format", "", "Output format: markdown (deps), api (public API), full (complete docs)")
+	detailedFlag := flag.Bool("detailed", false, "Show detailed method-level dependencies (with -format=markdown)")
+	strictFlag := flag.Bool("strict", true, "Fail on any violations (default: true)")
+	exitZeroFlag := flag.Bool("exit-zero", false, "Always exit with code 0, even on violations")
 	flag.Parse()
 
 	// Get project path

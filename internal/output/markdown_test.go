@@ -3,87 +3,75 @@ package output
 import (
 	"strings"
 	"testing"
-
-	"github.com/kgatilin/go-arch-lint/internal/graph"
-	"github.com/kgatilin/go-arch-lint/internal/scanner"
-	"github.com/kgatilin/go-arch-lint/internal/validator"
 )
 
-// Helper to convert []scanner.FileInfo to []graph.FileInfo (slice covariance workaround)
-func toGraphFiles(files []scanner.FileInfo) []graph.FileInfo {
-	result := make([]graph.FileInfo, len(files))
-	for i := range files {
-		result[i] = files[i]
-	}
-	return result
+// Test structs that implement output interfaces for testing
+
+type testDependency struct {
+	importPath  string
+	isLocal     bool
+	localPath   string
+	usedSymbols []string
 }
 
-// Test adapter to convert graph.Graph to output.Graph interface
-type testGraphAdapter struct {
-	g *graph.Graph
+func (td *testDependency) GetImportPath() string   { return td.importPath }
+func (td *testDependency) IsLocalDep() bool        { return td.isLocal }
+func (td *testDependency) GetLocalPath() string    { return td.localPath }
+func (td *testDependency) GetUsedSymbols() []string { return td.usedSymbols }
+
+type testFileNode struct {
+	relPath      string
+	pkg          string
+	dependencies []Dependency
 }
 
-func (tga *testGraphAdapter) GetNodes() []FileNode {
-	nodes := make([]FileNode, len(tga.g.Nodes))
-	for i := range tga.g.Nodes {
-		nodes[i] = &testFileNodeAdapter{node: &tga.g.Nodes[i]}
-	}
-	return nodes
+func (tfn *testFileNode) GetRelPath() string           { return tfn.relPath }
+func (tfn *testFileNode) GetPackage() string           { return tfn.pkg }
+func (tfn *testFileNode) GetDependencies() []Dependency { return tfn.dependencies }
+
+type testGraph struct {
+	nodes []FileNode
 }
 
-type testFileNodeAdapter struct {
-	node *graph.FileNode
+func (tg *testGraph) GetNodes() []FileNode { return tg.nodes }
+
+type testViolation struct {
+	violationType string
+	file          string
+	line          int
+	issue         string
+	rule          string
+	fix           string
 }
 
-func (tfna *testFileNodeAdapter) GetRelPath() string {
-	return tfna.node.RelPath
-}
-
-func (tfna *testFileNodeAdapter) GetPackage() string {
-	return tfna.node.Package
-}
-
-func (tfna *testFileNodeAdapter) GetDependencies() []Dependency {
-	deps := make([]Dependency, len(tfna.node.Dependencies))
-	for i := range tfna.node.Dependencies {
-		deps[i] = &tfna.node.Dependencies[i]
-	}
-	return deps
-}
-
-// Test adapter to convert validator.Violation to output.Violation interface
-type testViolationAdapter struct {
-	v *validator.Violation
-}
-
-func (tva *testViolationAdapter) GetType() string   { return string(tva.v.Type) }
-func (tva *testViolationAdapter) GetFile() string   { return tva.v.File }
-func (tva *testViolationAdapter) GetLine() int      { return tva.v.Line }
-func (tva *testViolationAdapter) GetIssue() string  { return tva.v.Issue }
-func (tva *testViolationAdapter) GetRule() string   { return tva.v.Rule }
-func (tva *testViolationAdapter) GetFix() string    { return tva.v.Fix }
+func (tv *testViolation) GetType() string  { return tv.violationType }
+func (tv *testViolation) GetFile() string  { return tv.file }
+func (tv *testViolation) GetLine() int     { return tv.line }
+func (tv *testViolation) GetIssue() string { return tv.issue }
+func (tv *testViolation) GetRule() string  { return tv.rule }
+func (tv *testViolation) GetFix() string   { return tv.fix }
 
 func TestGenerateMarkdown_Basic(t *testing.T) {
-	files := []scanner.FileInfo{
-		{
-			RelPath: "cmd/api/main.go",
-			Package: "main",
-			Imports: []string{
-				"fmt",
-				"github.com/test/project/pkg/service",
+	g := &testGraph{
+		nodes: []FileNode{
+			&testFileNode{
+				relPath: "cmd/api/main.go",
+				pkg:     "main",
+				dependencies: []Dependency{
+					&testDependency{importPath: "github.com/test/project/pkg/service", isLocal: true, localPath: "pkg/service"},
+				},
 			},
-		},
-		{
-			RelPath: "pkg/service/service.go",
-			Package: "service",
-			Imports: []string{
-				"github.com/external/lib",
+			&testFileNode{
+				relPath: "pkg/service/service.go",
+				pkg:     "service",
+				dependencies: []Dependency{
+					&testDependency{importPath: "github.com/external/lib", isLocal: false},
+				},
 			},
 		},
 	}
 
-	g := graph.Build(toGraphFiles(files), "github.com/test/project")
-	md := GenerateMarkdown(&testGraphAdapter{g: g})
+	md := GenerateMarkdown(g)
 
 	// Check header
 	if !strings.Contains(md, "# Dependency Graph") {
@@ -116,16 +104,17 @@ func TestGenerateMarkdown_Basic(t *testing.T) {
 }
 
 func TestGenerateMarkdown_NoDependencies(t *testing.T) {
-	files := []scanner.FileInfo{
-		{
-			RelPath: "pkg/types/types.go",
-			Package: "types",
-			Imports: []string{},
+	g := &testGraph{
+		nodes: []FileNode{
+			&testFileNode{
+				relPath:      "pkg/types/types.go",
+				pkg:          "types",
+				dependencies: []Dependency{},
+			},
 		},
 	}
 
-	g := graph.Build(toGraphFiles(files), "github.com/test/project")
-	md := GenerateMarkdown(&testGraphAdapter{g: g})
+	md := GenerateMarkdown(g)
 
 	if !strings.Contains(md, "depends on: (none)") {
 		t.Error("expected 'depends on: (none)' for file with no dependencies")
@@ -142,25 +131,22 @@ func TestFormatViolations_NoViolations(t *testing.T) {
 }
 
 func TestFormatViolations_WithViolations(t *testing.T) {
-	viol1 := validator.Violation{
-		Type:  validator.ViolationPkgToPkg,
-		File:  "pkg/http/handler.go",
-		Issue: "pkg/http imports pkg/database",
-		Rule:  "pkg packages must not import other pkg packages",
-		Fix:   "Import from internal/ or define interface locally",
-	}
-	viol2 := validator.Violation{
-		Type:  validator.ViolationCrossCmd,
-		File:  "cmd/api/main.go",
-		Line:  10,
-		Issue: "cmd/api imports cmd/worker",
-		Rule:  "cmd packages must not import other cmd packages",
-		Fix:   "Extract shared code to pkg/ or internal/",
-	}
-
 	violations := []Violation{
-		&testViolationAdapter{v: &viol1},
-		&testViolationAdapter{v: &viol2},
+		&testViolation{
+			violationType: "Forbidden pkg-to-pkg Dependency",
+			file:          "pkg/http/handler.go",
+			issue:         "pkg/http imports pkg/database",
+			rule:          "pkg packages must not import other pkg packages",
+			fix:           "Import from internal/ or define interface locally",
+		},
+		&testViolation{
+			violationType: "Cross-cmd Dependency",
+			file:          "cmd/api/main.go",
+			line:          10,
+			issue:         "cmd/api imports cmd/worker",
+			rule:          "cmd packages must not import other cmd packages",
+			fix:           "Extract shared code to pkg/ or internal/",
+		},
 	}
 
 	result := FormatViolations(violations)
@@ -202,15 +188,13 @@ func TestFormatViolations_WithViolations(t *testing.T) {
 }
 
 func TestFormatViolations_UnusedPackage(t *testing.T) {
-	viol := validator.Violation{
-		Type:  validator.ViolationUnused,
-		Issue: "Package pkg/legacy not imported by any cmd/ package",
-		Rule:  "All packages should be transitively imported from cmd/",
-		Fix:   "Remove package or add import from cmd/",
-	}
-
 	violations := []Violation{
-		&testViolationAdapter{v: &viol},
+		&testViolation{
+			violationType: "Unused Package",
+			issue:         "Package pkg/legacy not imported by any cmd/ package",
+			rule:          "All packages should be transitively imported from cmd/",
+			fix:           "Remove package or add import from cmd/",
+		},
 	}
 
 	result := FormatViolations(violations)

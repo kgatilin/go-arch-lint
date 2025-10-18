@@ -33,7 +33,7 @@ func Hello() {
 		t.Fatal(err)
 	}
 
-	s := scanner.New(tmpDir, "github.com/test/project", nil)
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
 	files, err := s.Scan([]string{"pkg"})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
@@ -93,7 +93,7 @@ import "fmt"
 		t.Fatal(err)
 	}
 
-	s := scanner.New(tmpDir, "github.com/test/project", []string{"vendor"})
+	s := scanner.New(tmpDir, "github.com/test/project", []string{"vendor"}, false)
 	files, err := s.Scan([]string{"pkg", "vendor"})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
@@ -132,7 +132,7 @@ import "testing"
 		t.Fatal(err)
 	}
 
-	s := scanner.New(tmpDir, "github.com/test/project", nil)
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
 	files, err := s.Scan([]string{"pkg"})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
@@ -151,7 +151,7 @@ import "testing"
 func TestScan_NonExistentPath(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	s := scanner.New(tmpDir, "github.com/test/project", nil)
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
 	files, err := s.Scan([]string{"nonexistent"})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
@@ -212,7 +212,7 @@ var internal = 10
 		t.Fatal(err)
 	}
 
-	s := scanner.New(tmpDir, "github.com/test/project", nil)
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
 	files, err := s.ScanWithAPI([]string{"pkg"})
 	if err != nil {
 		t.Fatalf("ScanWithAPI failed: %v", err)
@@ -300,7 +300,7 @@ const Version = "1.0"
 		t.Fatal(err)
 	}
 
-	s := scanner.New(tmpDir, "github.com/test/project", nil)
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
 	files, err := s.ScanWithAPI([]string{"pkg"})
 	if err != nil {
 		t.Fatalf("ScanWithAPI failed: %v", err)
@@ -371,7 +371,7 @@ func (*Handler) Handle() {}
 		t.Fatal(err)
 	}
 
-	s := scanner.New(tmpDir, "github.com/test/project", nil)
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
 	files, err := s.ScanWithAPI([]string{"pkg"})
 	if err != nil {
 		t.Fatalf("ScanWithAPI failed: %v", err)
@@ -394,5 +394,101 @@ func (*Handler) Handle() {}
 		if decl.Signature == "unknown" {
 			t.Errorf("unknown signature for %s", decl.Name)
 		}
+	}
+}
+
+func TestScan_LintTestFiles_Enabled(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create normal file
+	normalGo := `package pkg
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "main.go"), []byte(normalGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create test file
+	testGo := `package pkg
+import "testing"
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "main_test.go"), []byte(testGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Scan with lintTestFiles=true
+	s := scanner.New(tmpDir, "github.com/test/project", nil, true)
+	files, err := s.Scan([]string{"pkg"})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	// Should find BOTH main.go and main_test.go
+	if len(files) != 2 {
+		t.Fatalf("expected 2 files (including test file), got %d", len(files))
+	}
+
+	// Verify we have both files
+	foundMain := false
+	foundTest := false
+	for _, file := range files {
+		base := filepath.Base(file.Path)
+		if base == "main.go" {
+			foundMain = true
+		}
+		if base == "main_test.go" {
+			foundTest = true
+		}
+	}
+
+	if !foundMain {
+		t.Error("expected to find main.go")
+	}
+	if !foundTest {
+		t.Error("expected to find main_test.go when lintTestFiles=true")
+	}
+}
+
+func TestScan_LintTestFiles_Disabled(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create normal file
+	normalGo := `package pkg
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "main.go"), []byte(normalGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create test file
+	testGo := `package pkg
+import "testing"
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "main_test.go"), []byte(testGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Scan with lintTestFiles=false
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
+	files, err := s.Scan([]string{"pkg"})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	// Should find ONLY main.go, not main_test.go
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file (excluding test file), got %d", len(files))
+	}
+
+	if filepath.Base(files[0].Path) != "main.go" {
+		t.Errorf("expected main.go, got %s", filepath.Base(files[0].Path))
 	}
 }
