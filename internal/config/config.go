@@ -12,7 +12,13 @@ type Config struct {
 	Module      string              `yaml:"module"`
 	ScanPaths   []string            `yaml:"scan_paths"`
 	IgnorePaths []string            `yaml:"ignore_paths"`
+	Structure   Structure           `yaml:"structure"`
 	Rules       Rules               `yaml:"rules"`
+}
+
+type Structure struct {
+	RequiredDirectories    map[string]string `yaml:"required_directories"`
+	AllowOtherDirectories  bool              `yaml:"allow_other_directories"`
 }
 
 type Rules struct {
@@ -28,6 +34,16 @@ func (c *Config) GetDirectoriesImport() map[string][]string {
 // ShouldDetectUnused implements validator.Config interface
 func (c *Config) ShouldDetectUnused() bool {
 	return c.Rules.DetectUnused
+}
+
+// GetRequiredDirectories returns the required directory structure
+func (c *Config) GetRequiredDirectories() map[string]string {
+	return c.Structure.RequiredDirectories
+}
+
+// ShouldAllowOtherDirectories returns whether non-required directories are allowed
+func (c *Config) ShouldAllowOtherDirectories() bool {
+	return c.Structure.AllowOtherDirectories
 }
 
 // Load reads and parses the .goarchlint configuration file
@@ -62,6 +78,14 @@ func Load(projectPath string) (*Config, error) {
 		cfg.ScanPaths = []string{"cmd", "pkg", "internal"}
 	}
 
+	// Set default for Structure if not specified
+	if cfg.Structure.RequiredDirectories == nil {
+		cfg.Structure.RequiredDirectories = make(map[string]string)
+	}
+	// Default to allowing other directories if not explicitly set
+	// Note: YAML unmarshaling sets bool to false by default, so we check if any structure was defined
+	// If no structure at all, we allow other dirs. If structure exists but field not set, it's false.
+
 	return &cfg, nil
 }
 
@@ -75,6 +99,10 @@ func defaultConfig(projectPath string) (*Config, error) {
 		Module:      module,
 		ScanPaths:   []string{"cmd", "pkg", "internal"},
 		IgnorePaths: []string{"vendor", "testdata"},
+		Structure: Structure{
+			RequiredDirectories:   make(map[string]string),
+			AllowOtherDirectories: true,
+		},
 		Rules: Rules{
 			DirectoriesImport: map[string][]string{
 				"cmd":      {"pkg", "internal"},

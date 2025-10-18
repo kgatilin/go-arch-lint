@@ -8,6 +8,14 @@
 #
 # See docs/architecture.md for detailed explanation of the design principles.
 
+# Project structure
+structure:
+  required_directories:
+    cmd: "Command-line entry points"
+    pkg: "Public API and orchestration layer with adapters"
+    internal: "Domain primitives with complete isolation"
+  allow_other_directories: true
+
 # Validation rules
 rules:
   # Define what each directory type can import

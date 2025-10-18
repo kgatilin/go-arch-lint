@@ -17,6 +17,7 @@ type Dependency interface {
 // FileNode interface for rendering file nodes
 type FileNode interface {
 	GetRelPath() string
+	GetPackage() string
 	GetDependencies() []Dependency
 }
 

@@ -1,5 +1,5 @@
 # Binaries
-go-arch-lint
+/go-arch-lint
 *.exe
 *.exe~
 *.dll
@@ -21,3 +21,5 @@ go.work
 *.swp
 *.swo
 *~
+
+.darwinflow
