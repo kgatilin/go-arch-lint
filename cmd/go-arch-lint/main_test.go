@@ -690,3 +690,273 @@ go 1.21
 		t.Error("expected internal/adapters directory in hexagonal preset")
 	}
 }
+
+func TestCLI_Refresh_SamePreset(t *testing.T) {
+	binary := buildBinary(t)
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Initialize with simple preset
+	initCmd := exec.Command(binary, "init", "--preset=simple", "--create-dirs=false")
+	initCmd.Dir = tmpDir
+	output, err := initCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("init failed: %v\nOutput: %s", err, output)
+	}
+
+	// Modify the config to add a custom comment
+	configPath := filepath.Join(tmpDir, ".goarchlint")
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	modifiedConfig := "# Custom modification\n" + string(configData)
+	if err := os.WriteFile(configPath, []byte(modifiedConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run refresh without preset flag (should use preset_used from config)
+	refreshCmd := exec.Command(binary, "refresh")
+	refreshCmd.Dir = tmpDir
+	output, err = refreshCmd.CombinedOutput()
+	if err != nil {
+		t.Errorf("refresh failed: %v\nOutput: %s", err, output)
+	}
+
+	// Verify backup was created
+	backupPath := filepath.Join(tmpDir, ".goarchlint.backup")
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		t.Error("expected .goarchlint.backup to be created")
+	}
+
+	// Verify backup contains the custom modification
+	backupData, err := os.ReadFile(backupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(backupData), "# Custom modification") {
+		t.Error("expected backup to contain custom modification")
+	}
+
+	// Verify refreshed config is updated (custom modification should be gone)
+	refreshedData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshedStr := string(refreshedData)
+	if strings.Contains(refreshedStr, "# Custom modification") {
+		t.Error("expected custom modification to be removed after refresh")
+	}
+
+	// Verify it's still the simple preset
+	if !strings.Contains(refreshedStr, "preset_used: simple") {
+		t.Error("expected preset_used: simple after refresh")
+	}
+
+	// Verify header indicates refresh
+	if !strings.Contains(refreshedStr, "Refreshed by go-arch-lint refresh") {
+		t.Error("expected refresh header in config")
+	}
+}
+
+func TestCLI_Refresh_SwitchPreset(t *testing.T) {
+	binary := buildBinary(t)
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Initialize with simple preset
+	initCmd := exec.Command(binary, "init", "--preset=simple", "--create-dirs=false")
+	initCmd.Dir = tmpDir
+	output, err := initCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("init failed: %v\nOutput: %s", err, output)
+	}
+
+	// Refresh with ddd preset
+	refreshCmd := exec.Command(binary, "refresh", "--preset=ddd")
+	refreshCmd.Dir = tmpDir
+	output, err = refreshCmd.CombinedOutput()
+	if err != nil {
+		t.Errorf("refresh failed: %v\nOutput: %s", err, output)
+	}
+
+	// Read refreshed config
+	configPath := filepath.Join(tmpDir, ".goarchlint")
+	refreshedData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshedStr := string(refreshedData)
+
+	// Verify it's now the ddd preset
+	if !strings.Contains(refreshedStr, "preset_used: ddd") {
+		t.Error("expected preset_used: ddd after switching presets")
+	}
+
+	// Verify ddd-specific directories
+	if !strings.Contains(refreshedStr, "internal/domain:") {
+		t.Error("expected internal/domain directory from ddd preset")
+	}
+	if !strings.Contains(refreshedStr, "internal/app:") {
+		t.Error("expected internal/app directory from ddd preset")
+	}
+	if !strings.Contains(refreshedStr, "internal/infra:") {
+		t.Error("expected internal/infra directory from ddd preset")
+	}
+
+	// Verify simple preset directories are gone
+	if strings.Contains(refreshedStr, "pkg:") && strings.Contains(refreshedStr, "Public libraries") {
+		t.Error("expected simple preset directories to be replaced")
+	}
+}
+
+func TestCLI_Refresh_NoConfig(t *testing.T) {
+	binary := buildBinary(t)
+	tmpDir := t.TempDir()
+
+	// Don't create .goarchlint file
+
+	// Try to refresh
+	refreshCmd := exec.Command(binary, "refresh")
+	refreshCmd.Dir = tmpDir
+	output, err := refreshCmd.CombinedOutput()
+
+	// Should fail
+	if err == nil {
+		t.Error("expected refresh to fail when .goarchlint doesn't exist")
+	}
+
+	outputStr := string(output)
+	if !strings.Contains(outputStr, ".goarchlint not found") {
+		t.Errorf("expected error message about missing .goarchlint, got: %s", outputStr)
+	}
+}
+
+func TestCLI_Refresh_CustomConfig(t *testing.T) {
+	binary := buildBinary(t)
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a custom config (no preset_used field)
+	customConfig := `# Custom configuration
+rules:
+  directories_import:
+    cmd: [pkg]
+    pkg: []
+`
+	configPath := filepath.Join(tmpDir, ".goarchlint")
+	if err := os.WriteFile(configPath, []byte(customConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to refresh without specifying preset
+	refreshCmd := exec.Command(binary, "refresh")
+	refreshCmd.Dir = tmpDir
+	output, err := refreshCmd.CombinedOutput()
+
+	// Should fail
+	if err == nil {
+		t.Error("expected refresh to fail for custom config without --preset flag")
+	}
+
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "cannot refresh") || !strings.Contains(outputStr, "preset") {
+		t.Errorf("expected error message about needing preset, got: %s", outputStr)
+	}
+}
+
+func TestCLI_Init_GeneratesFullDocs(t *testing.T) {
+	binary := buildBinary(t)
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create minimal Go files in the directories that will be created
+	// (needed for documentation generation to work)
+	for _, dir := range []string{"cmd", "pkg", "internal"} {
+		dirPath := filepath.Join(tmpDir, dir)
+		if err := os.MkdirAll(dirPath, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create a simple .go file
+		goFile := "package " + dir + "\n"
+		if err := os.WriteFile(filepath.Join(dirPath, dir+".go"), []byte(goFile), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Run init with simple preset
+	initCmd := exec.Command(binary, "init", "--preset=simple")
+	initCmd.Dir = tmpDir
+	output, err := initCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("init failed: %v\nOutput: %s", err, output)
+	}
+
+	// Verify only arch-generated.md was created (not separate files)
+	archGenPath := filepath.Join(tmpDir, "docs", "arch-generated.md")
+	if _, err := os.Stat(archGenPath); os.IsNotExist(err) {
+		t.Error("expected docs/arch-generated.md to be created")
+	}
+
+	// Read the generated docs
+	docsData, err := os.ReadFile(archGenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	docsStr := string(docsData)
+
+	// Verify it's comprehensive documentation (contains all sections)
+	expectedSections := []string{
+		"# Project Architecture",
+		"## Project Structure",
+		"## Architectural Rules",
+		"## Dependency Graph",
+		"## Public API",
+		"## Statistics",
+	}
+
+	for _, section := range expectedSections {
+		if !strings.Contains(docsStr, section) {
+			t.Errorf("expected section '%s' in generated docs", section)
+		}
+	}
+
+	// Verify old separate files are NOT created
+	apiGenPath := filepath.Join(tmpDir, "docs", "public-api-generated.md")
+	if _, err := os.Stat(apiGenPath); err == nil {
+		t.Error("did not expect docs/public-api-generated.md to be created (should be in single file now)")
+	}
+}

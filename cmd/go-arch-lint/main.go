@@ -19,6 +19,8 @@ func run() int {
 		switch os.Args[1] {
 		case "init":
 			return runInit()
+		case "refresh":
+			return runRefresh()
 		case "docs":
 			return runDocs()
 		}
@@ -110,6 +112,39 @@ func runInit() int {
 
 	// Run init
 	if err := linter.Init(absPath, preset, *createDirsFlag); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 2
+	}
+
+	return 0
+}
+
+func runRefresh() int {
+	// Create a new flag set for refresh subcommand
+	refreshFlags := flag.NewFlagSet("refresh", flag.ExitOnError)
+	presetFlag := refreshFlags.String("preset", "", "Preset to switch to (ddd, simple, hexagonal). If not specified, refreshes with the same preset.")
+
+	// Parse flags starting from os.Args[2] (after "refresh")
+	if err := refreshFlags.Parse(os.Args[2:]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 2
+	}
+
+	// Get project path from remaining args (optional)
+	projectPath := "."
+	if refreshFlags.NArg() > 0 {
+		projectPath = refreshFlags.Arg(0)
+	}
+
+	// Make path absolute
+	absPath, err := filepath.Abs(projectPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: invalid path: %v\n", err)
+		return 2
+	}
+
+	// Run refresh
+	if err := linter.Refresh(absPath, *presetFlag); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 2
 	}
