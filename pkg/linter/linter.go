@@ -170,9 +170,9 @@ func Run(projectPath string, format string, detailed bool) (string, string, erro
 		g = graph.Build(graphFiles, cfg.Module)
 	}
 
-	// Validate using adapter
+	// Validate using adapter (with project path for structure validation)
 	validatorGraph := &graphAdapter{g: g}
-	v := validator.New(cfg, validatorGraph)
+	v := validator.NewWithPath(cfg, validatorGraph, projectPath)
 	violations := v.Validate()
 
 	// Convert violations to output.Violation interface
@@ -186,12 +186,70 @@ func Run(projectPath string, format string, detailed bool) (string, string, erro
 	if format == "markdown" {
 		outputGraph := &outputGraphAdapter{g: g}
 		graphOutput = output.GenerateMarkdown(outputGraph)
+	} else if format == "full" || format == "docs" {
+		// Generate comprehensive documentation
+		graphOutput = generateFullDocumentation(projectPath, cfg, g, violations)
 	}
 
 	// Format violations
 	violationsOutput := output.FormatViolations(outViolations)
 
 	return graphOutput, violationsOutput, nil
+}
+
+// generateFullDocumentation creates comprehensive documentation combining structure, rules, dependencies, and API
+func generateFullDocumentation(projectPath string, cfg *config.Config, g *graph.Graph, violations []validator.Violation) string {
+	// Scan for public API
+	s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths)
+	filesWithAPI, err := s.ScanWithAPI(cfg.ScanPaths)
+	if err != nil {
+		// Fallback to empty API if scan fails
+		filesWithAPI = []scanner.FileInfoWithAPI{}
+	}
+
+	// Convert to output.FileWithAPI interface
+	outFiles := make([]output.FileWithAPI, len(filesWithAPI))
+	for i := range filesWithAPI {
+		outFiles[i] = &fileWithAPIAdapter{file: &filesWithAPI[i]}
+	}
+
+	// Check which required directories exist
+	existingDirs := make(map[string]bool)
+	for dirPath := range cfg.Structure.RequiredDirectories {
+		fullPath := filepath.Join(projectPath, dirPath)
+		if info, err := os.Stat(fullPath); err == nil && info.IsDir() {
+			existingDirs[dirPath] = true
+		} else {
+			existingDirs[dirPath] = false
+		}
+	}
+
+	// Count unique packages
+	packageSet := make(map[string]bool)
+	for _, node := range g.Nodes {
+		packageSet[node.Package] = true
+	}
+
+	// Create full documentation structure
+	fullDoc := output.FullDocumentation{
+		Structure: output.StructureInfo{
+			RequiredDirectories:   cfg.Structure.RequiredDirectories,
+			AllowOtherDirectories: cfg.Structure.AllowOtherDirectories,
+			ExistingDirs:          existingDirs,
+		},
+		Rules: output.RulesInfo{
+			DirectoriesImport: cfg.Rules.DirectoriesImport,
+			DetectUnused:      cfg.Rules.DetectUnused,
+		},
+		Graph:          &outputGraphAdapter{g: g},
+		Files:          outFiles,
+		Violations:     nil, // Not included in output, shown separately in stderr
+		ViolationCount: len(violations),
+		FileCount:      len(g.Nodes),
+		PackageCount:   len(packageSet),
+	}
+
+	return output.GenerateFullDocumentation(fullDoc)
 }
 
 const defaultConfig = `# go-arch-lint configuration
@@ -231,13 +289,40 @@ cmd → pkg → internal
 2. **Structural Typing**: Types satisfy interfaces via matching methods (no explicit implements)
 3. **No Slice Covariance**: Create adapters to convert []ConcreteType → []InterfaceType
 
+## Documentation Generation (Run Regularly)
+
+Keep documentation synchronized with code changes:
+
+` + "```bash" + `
+# Simplest: Generate comprehensive documentation (recommended)
+go-arch-lint docs
+
+# Custom output location
+go-arch-lint docs --output=docs/ARCHITECTURE.md
+
+# Alternative: Manual control with flags
+go-arch-lint -detailed -format=full . > docs/arch-generated.md 2>&1
+` + "```" + `
+
+**Recommended**: Use ` + "`go-arch-lint docs`" + ` which automatically generates comprehensive documentation including:
+- Project structure validation status
+- Architectural rules from .goarchlint
+- Detailed dependency graph with method-level usage
+- Complete public API documentation
+- Statistics summary
+
+**When to regenerate**:
+- After adding/removing packages or files
+- After changing public APIs (exported functions, types, methods)
+- After modifying package dependencies
+- Before committing architectural changes
+- Run regularly during development to track changes
+
 ## Before Every Commit
 
 1. ` + "`go test ./...`" + ` - all tests must pass
 2. ` + "`go-arch-lint .`" + ` - ZERO violations required (non-negotiable)
-3. Update docs if architecture/API changed:
-   - ` + "`go-arch-lint -detailed -format=markdown . > docs/arch-generated.md`" + `
-   - ` + "`go-arch-lint -format=api . > docs/public-api-generated.md`" + `
+3. Regenerate docs if architecture/API changed (see above)
 
 ## When Linter Reports Violations
 
@@ -266,16 +351,36 @@ Run ` + "`go-arch-lint .`" + ` frequently during development. Zero violations re
 `
 
 // Init initializes a new go-arch-lint project with default configuration and documentation
-func Init(projectPath string) error {
-	// Create .goarchlint config file
+func Init(projectPath, preset string, createDirs bool) error {
+	// Check if .goarchlint already exists
 	configPath := filepath.Join(projectPath, ".goarchlint")
 	if _, err := os.Stat(configPath); err == nil {
 		return fmt.Errorf(".goarchlint already exists, refusing to overwrite")
 	}
-	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {
-		return fmt.Errorf("failed to create .goarchlint: %w", err)
+
+	// Create .goarchlint config file based on preset
+	if preset != "" && preset != "custom" {
+		// Use preset
+		if err := CreateConfigFromPreset(projectPath, preset, createDirs); err != nil {
+			return fmt.Errorf("failed to create config from preset: %w", err)
+		}
+		fmt.Printf("✓ Created .goarchlint with '%s' preset\n", preset)
+
+		if createDirs {
+			p, _ := GetPreset(preset)
+			if p != nil {
+				for dirPath := range p.Config.Structure.RequiredDirectories {
+					fmt.Printf("✓ Created directory %s\n", dirPath)
+				}
+			}
+		}
+	} else {
+		// Use default config
+		if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {
+			return fmt.Errorf("failed to create .goarchlint: %w", err)
+		}
+		fmt.Println("✓ Created .goarchlint")
 	}
-	fmt.Println("✓ Created .goarchlint")
 
 	// Create docs directory
 	docsPath := filepath.Join(projectPath, "docs")

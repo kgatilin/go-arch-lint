@@ -31,11 +31,22 @@ go test ./internal/validator -run TestValidate_PkgToPkgViolation
 ./go-arch-lint -format=markdown .    # Dependency graph
 ./go-arch-lint -detailed -format=markdown .  # Detailed method-level dependencies
 ./go-arch-lint -format=api .         # Public API documentation
+./go-arch-lint -format=full .        # Comprehensive documentation (structure + rules + deps + API)
 ./go-arch-lint -exit-zero .          # Don't fail on violations
 
-# Update generated documentation
+# Update generated documentation (simplest)
+./go-arch-lint docs                  # Generates to docs/arch-generated.md
+./go-arch-lint docs --output=docs/ARCHITECTURE.md  # Custom location
+
+# Alternative: Manual documentation commands
 ./go-arch-lint -detailed -format=markdown . > docs/arch-generated.md 2>&1
 ./go-arch-lint -format=api . > docs/public-api-generated.md 2>&1
+
+# Initialize new project with presets
+./go-arch-lint init                  # Interactive preset selection
+./go-arch-lint init --preset=ddd     # Domain-Driven Design preset
+./go-arch-lint init --preset=simple  # Simple Go project structure
+./go-arch-lint init --preset=hexagonal  # Ports & Adapters architecture
 ```
 
 ## Critical Architecture Constraints
@@ -43,6 +54,13 @@ go test ./internal/validator -run TestValidate_PkgToPkgViolation
 This codebase follows strict architectural rules defined in `.goarchlint`:
 
 ```yaml
+structure:
+  required_directories:
+    cmd: "Command-line entry points"
+    pkg: "Public API and orchestration layer with adapters"
+    internal: "Domain primitives with complete isolation"
+  allow_other_directories: true
+
 rules:
   directories_import:
     cmd: [pkg]         # cmd only imports pkg/linter
@@ -51,6 +69,8 @@ rules:
 ```
 
 **These rules are enforced by the tool itself.** Running `./go-arch-lint .` must always produce zero violations.
+
+**Structure Validation**: Required directories must exist, contain `.go` files, and have code in the dependency graph. This ensures the architecture is not just declared, but actually implemented.
 
 ## High-Level Architecture
 
@@ -210,8 +230,7 @@ The tool validates 5 types of architectural violations:
 - **.goarchlint** - Configuration for this project (strict mode: `internal: []`)
 - **README.md** - User-facing documentation with usage, flags, examples, and configuration
 - **@docs/architecture.md** - Comprehensive guide to the architecture principles
-- **@docs/arch-generated.md** - Generated dependency graph with method-level details (proof of zero violations)
-- **@docs/public-api-generated.md** - Generated public API documentation
+- **@docs/arch-generated.md** - Generated architecture documentation with method-level details (proof of zero violations)
 
 ## What Makes This Architecture Work
 
@@ -240,10 +259,11 @@ The tool validates 5 types of architectural violations:
 3. **Run linter on itself**: `./go-arch-lint .` (must show zero violations)
 4. **Update generated documentation** (if changes affect architecture, public API, CLI flags, or usage):
    ```bash
-   # Update dependency graph with method-level details
-   ./go-arch-lint -detailed -format=markdown . > docs/arch-generated.md 2>&1
+   # Simplest: Generate comprehensive documentation
+   ./go-arch-lint docs
 
-   # Update public API documentation
+   # Or generate specific docs separately
+   ./go-arch-lint -detailed -format=markdown . > docs/arch-generated.md 2>&1
    ./go-arch-lint -format=api . > docs/public-api-generated.md 2>&1
    ```
 5. **Update README.md** (if changes affect usage, flags, configuration, or examples):
