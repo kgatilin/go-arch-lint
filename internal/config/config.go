@@ -10,12 +10,44 @@ import (
 
 type Config struct {
 	Module      string              `yaml:"module"`
-	ScanPaths   []string            `yaml:"scan_paths"`
-	IgnorePaths []string            `yaml:"ignore_paths"`
-	Structure   Structure           `yaml:"structure"`
-	Rules       Rules               `yaml:"rules"`
+	ScanPaths   []string            `yaml:"scan_paths,omitempty"`
+	IgnorePaths []string            `yaml:"ignore_paths,omitempty"`
+
+	// New format: preset + overrides
+	Preset    *PresetSection    `yaml:"preset,omitempty"`
+	Overrides *OverridesSection `yaml:"overrides,omitempty"`
+
+	// Old format (backward compatibility): flat structure
+	Structure   Structure           `yaml:"structure,omitempty"`
+	Rules       Rules               `yaml:"rules,omitempty"`
 	PresetUsed  string              `yaml:"preset_used,omitempty"`
 	ErrorPrompt ErrorPrompt         `yaml:"error_prompt,omitempty"`
+
+	// Internal: merged result (populated after loading)
+	merged *mergedConfig
+}
+
+// PresetSection contains the preset configuration
+type PresetSection struct {
+	Name        string      `yaml:"name"`
+	Structure   Structure   `yaml:"structure"`
+	Rules       Rules       `yaml:"rules"`
+	ErrorPrompt ErrorPrompt `yaml:"error_prompt,omitempty"`
+}
+
+// OverridesSection contains custom overrides
+type OverridesSection struct {
+	Structure   *Structure   `yaml:"structure,omitempty"`
+	Rules       *Rules       `yaml:"rules,omitempty"`
+	ErrorPrompt *ErrorPrompt `yaml:"error_prompt,omitempty"`
+}
+
+// mergedConfig holds the final merged configuration
+type mergedConfig struct {
+	Structure   Structure
+	Rules       Rules
+	ErrorPrompt ErrorPrompt
+	PresetName  string
 }
 
 type ErrorPrompt struct {
@@ -61,98 +93,134 @@ type TestFiles struct {
 	RequireBlackbox bool     `yaml:"require_blackbox"`      // Require blackbox tests (package foo_test)
 }
 
+// getMerged returns the merged config (handles both old and new formats)
+func (c *Config) getMerged() *mergedConfig {
+	if c.merged != nil {
+		return c.merged
+	}
+
+	// Initialize merged config
+	c.merged = &mergedConfig{}
+
+	// New format: merge preset + overrides
+	if c.Preset != nil {
+		c.merged.Structure = c.Preset.Structure
+		c.merged.Rules = c.Preset.Rules
+		c.merged.ErrorPrompt = c.Preset.ErrorPrompt
+		c.merged.PresetName = c.Preset.Name
+
+		// Apply overrides
+		if c.Overrides != nil {
+			c.merged.Structure = mergeStructure(c.merged.Structure, c.Overrides.Structure)
+			c.merged.Rules = mergeRules(c.merged.Rules, c.Overrides.Rules)
+			c.merged.ErrorPrompt = mergeErrorPrompt(c.merged.ErrorPrompt, c.Overrides.ErrorPrompt)
+		}
+	} else {
+		// Old format: use flat structure directly
+		c.merged.Structure = c.Structure
+		c.merged.Rules = c.Rules
+		c.merged.ErrorPrompt = c.ErrorPrompt
+		c.merged.PresetName = c.PresetUsed
+	}
+
+	return c.merged
+}
+
 // GetDirectoriesImport implements validator.Config interface
 func (c *Config) GetDirectoriesImport() map[string][]string {
-	return c.Rules.DirectoriesImport
+	return c.getMerged().Rules.DirectoriesImport
 }
 
 // ShouldDetectUnused implements validator.Config interface
 func (c *Config) ShouldDetectUnused() bool {
-	return c.Rules.DetectUnused
+	return c.getMerged().Rules.DetectUnused
 }
 
 // GetRequiredDirectories returns the required directory structure
 func (c *Config) GetRequiredDirectories() map[string]string {
-	return c.Structure.RequiredDirectories
+	return c.getMerged().Structure.RequiredDirectories
 }
 
 // ShouldAllowOtherDirectories returns whether non-required directories are allowed
 func (c *Config) ShouldAllowOtherDirectories() bool {
-	return c.Structure.AllowOtherDirectories
+	return c.getMerged().Structure.AllowOtherDirectories
 }
 
 // GetPresetUsed returns the name of the preset used to create this config
 func (c *Config) GetPresetUsed() string {
-	return c.PresetUsed
+	return c.getMerged().PresetName
 }
 
 // GetErrorPrompt returns the architectural context for error messages
 func (c *Config) GetErrorPrompt() ErrorPrompt {
-	return c.ErrorPrompt
+	return c.getMerged().ErrorPrompt
 }
 
 // ShouldDetectSharedExternalImports implements validator.Config interface
 func (c *Config) ShouldDetectSharedExternalImports() bool {
-	return c.Rules.SharedExternalImports.Detect
+	return c.getMerged().Rules.SharedExternalImports.Detect
 }
 
 // GetSharedExternalImportsMode implements validator.Config interface
 func (c *Config) GetSharedExternalImportsMode() string {
-	if c.Rules.SharedExternalImports.Mode == "" {
+	mode := c.getMerged().Rules.SharedExternalImports.Mode
+	if mode == "" {
 		return "warn" // Default mode
 	}
-	return c.Rules.SharedExternalImports.Mode
+	return mode
 }
 
 // GetSharedExternalImportsExclusions implements validator.Config interface
 func (c *Config) GetSharedExternalImportsExclusions() []string {
-	return c.Rules.SharedExternalImports.Exclusions
+	return c.getMerged().Rules.SharedExternalImports.Exclusions
 }
 
 // GetSharedExternalImportsExclusionPatterns implements validator.Config interface
 func (c *Config) GetSharedExternalImportsExclusionPatterns() []string {
-	return c.Rules.SharedExternalImports.ExclusionPatterns
+	return c.getMerged().Rules.SharedExternalImports.ExclusionPatterns
 }
 
 // ShouldLintTestFiles implements validator.Config interface
 func (c *Config) ShouldLintTestFiles() bool {
-	return c.Rules.TestFiles.Lint
+	return c.getMerged().Rules.TestFiles.Lint
 }
 
 // GetTestExemptImports implements validator.Config interface
 func (c *Config) GetTestExemptImports() []string {
-	return c.Rules.TestFiles.ExemptImports
+	return c.getMerged().Rules.TestFiles.ExemptImports
 }
 
 // GetTestFileLocation implements validator.Config interface
 func (c *Config) GetTestFileLocation() string {
-	if c.Rules.TestFiles.Location == "" {
+	location := c.getMerged().Rules.TestFiles.Location
+	if location == "" {
 		return "colocated" // Default: tests next to code
 	}
-	return c.Rules.TestFiles.Location
+	return location
 }
 
 // ShouldRequireBlackboxTests implements validator.Config interface
 func (c *Config) ShouldRequireBlackboxTests() bool {
-	return c.Rules.TestFiles.RequireBlackbox
+	return c.getMerged().Rules.TestFiles.RequireBlackbox
 }
 
 // IsCoverageEnabled implements coverage.Config interface
 func (c *Config) IsCoverageEnabled() bool {
-	return c.Rules.TestCoverage.Enabled
+	return c.getMerged().Rules.TestCoverage.Enabled
 }
 
 // GetCoverageThreshold implements coverage.Config interface
 func (c *Config) GetCoverageThreshold() float64 {
-	return c.Rules.TestCoverage.Threshold
+	return c.getMerged().Rules.TestCoverage.Threshold
 }
 
 // GetPackageThresholds implements coverage.Config interface
 func (c *Config) GetPackageThresholds() map[string]float64 {
-	if c.Rules.TestCoverage.PackageThresholds == nil {
+	thresholds := c.getMerged().Rules.TestCoverage.PackageThresholds
+	if thresholds == nil {
 		return make(map[string]float64)
 	}
-	return c.Rules.TestCoverage.PackageThresholds
+	return thresholds
 }
 
 // GetModule implements validator.Config interface
@@ -162,7 +230,116 @@ func (c *Config) GetModule() string {
 
 // ShouldRunStaticcheck returns whether staticcheck should be run
 func (c *Config) ShouldRunStaticcheck() bool {
-	return c.Rules.Staticcheck
+	return c.getMerged().Rules.Staticcheck
+}
+
+// mergeStructure merges override into base
+func mergeStructure(base Structure, override *Structure) Structure {
+	if override == nil {
+		return base
+	}
+
+	result := base
+
+	// Merge required_directories (add/replace keys)
+	if override.RequiredDirectories != nil {
+		if result.RequiredDirectories == nil {
+			result.RequiredDirectories = make(map[string]string)
+		}
+		for k, v := range override.RequiredDirectories {
+			result.RequiredDirectories[k] = v
+		}
+	}
+
+	// Note: AllowOtherDirectories is a bool - we need to check if it was explicitly set
+	// Since we can't distinguish between false and unset in Go, we apply override's value only if set to true
+	// This is acceptable since the typical use case is to relax restrictions in overrides
+	if override.AllowOtherDirectories {
+		result.AllowOtherDirectories = true
+	}
+
+	return result
+}
+
+// mergeRules merges override into base
+func mergeRules(base Rules, override *Rules) Rules {
+	if override == nil {
+		return base
+	}
+
+	result := base
+
+	// Merge directories_import (add/replace keys)
+	if override.DirectoriesImport != nil {
+		if result.DirectoriesImport == nil {
+			result.DirectoriesImport = make(map[string][]string)
+		}
+		for k, v := range override.DirectoriesImport {
+			result.DirectoriesImport[k] = v
+		}
+	}
+
+	// Merge SharedExternalImports
+	if override.SharedExternalImports.Mode != "" {
+		result.SharedExternalImports.Mode = override.SharedExternalImports.Mode
+	}
+	if override.SharedExternalImports.Exclusions != nil {
+		result.SharedExternalImports.Exclusions = override.SharedExternalImports.Exclusions
+	}
+	if override.SharedExternalImports.ExclusionPatterns != nil {
+		result.SharedExternalImports.ExclusionPatterns = override.SharedExternalImports.ExclusionPatterns
+	}
+
+	// Merge TestFiles
+	if override.TestFiles.ExemptImports != nil {
+		result.TestFiles.ExemptImports = override.TestFiles.ExemptImports
+	}
+	if override.TestFiles.Location != "" {
+		result.TestFiles.Location = override.TestFiles.Location
+	}
+
+	// Merge TestCoverage
+	if override.TestCoverage.Threshold > 0 {
+		result.TestCoverage.Threshold = override.TestCoverage.Threshold
+	}
+	if override.TestCoverage.PackageThresholds != nil {
+		if result.TestCoverage.PackageThresholds == nil {
+			result.TestCoverage.PackageThresholds = make(map[string]float64)
+		}
+		for k, v := range override.TestCoverage.PackageThresholds {
+			result.TestCoverage.PackageThresholds[k] = v
+		}
+	}
+
+	return result
+}
+
+// mergeErrorPrompt merges override into base
+func mergeErrorPrompt(base ErrorPrompt, override *ErrorPrompt) ErrorPrompt {
+	if override == nil {
+		return base
+	}
+
+	result := base
+
+	// Override primitives if set
+	if override.ArchitecturalGoals != "" {
+		result.ArchitecturalGoals = override.ArchitecturalGoals
+	}
+	if override.Principles != nil {
+		result.Principles = override.Principles
+	}
+	if override.RefactoringGuidance != "" {
+		result.RefactoringGuidance = override.RefactoringGuidance
+	}
+	if override.CoverageGuidance != "" {
+		result.CoverageGuidance = override.CoverageGuidance
+	}
+	if override.BlackboxTestingGuidance != "" {
+		result.BlackboxTestingGuidance = override.BlackboxTestingGuidance
+	}
+
+	return result
 }
 
 // Load reads and parses the .goarchlint configuration file
@@ -196,14 +373,14 @@ func Load(projectPath string) (*Config, error) {
 	if len(cfg.ScanPaths) == 0 {
 		cfg.ScanPaths = []string{"cmd", "pkg", "internal"}
 	}
+	if len(cfg.IgnorePaths) == 0 {
+		cfg.IgnorePaths = []string{"vendor", "testdata"}
+	}
 
-	// Set default for Structure if not specified
-	if cfg.Structure.RequiredDirectories == nil {
+	// For old format (backward compatibility): set default for Structure if not specified
+	if cfg.Preset == nil && cfg.Structure.RequiredDirectories == nil {
 		cfg.Structure.RequiredDirectories = make(map[string]string)
 	}
-	// Default to allowing other directories if not explicitly set
-	// Note: YAML unmarshaling sets bool to false by default, so we check if any structure was defined
-	// If no structure at all, we allow other dirs. If structure exists but field not set, it's false.
 
 	return &cfg, nil
 }

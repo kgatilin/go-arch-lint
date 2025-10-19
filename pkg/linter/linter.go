@@ -597,8 +597,8 @@ func Refresh(projectPath, preset string) error {
 		fmt.Println("✓ Refreshed .goarchlint (backup saved to .goarchlint.backup)")
 	}
 
-	fmt.Println("\nℹ Note: Any custom modifications to .goarchlint have been overwritten.")
-	fmt.Println("ℹ If you had custom settings, restore them from .goarchlint.backup")
+	fmt.Println("\nℹ Note: The 'preset' section has been updated with the latest version.")
+	fmt.Println("ℹ Your custom 'overrides' section has been preserved.")
 	fmt.Println("\nNext steps:")
 	fmt.Println("  1. Review changes in .goarchlint")
 	fmt.Println("  2. Run: go-arch-lint . (to validate with updated config)")
