@@ -743,6 +743,37 @@ The tool validates 5 types of architectural violations:
    - Modified interfaces have updated adapters in `pkg/linter/linter.go` and test files
    - No internal package imports other internal packages
 
+9. **✅ COMMIT THE CHANGES** - This is MANDATORY, not optional:
+   ```bash
+   # Stage all modified files
+   git add <modified-files>
+
+   # Create commit with descriptive message
+   git commit -m "$(cat <<'EOF'
+   <concise one-line summary>
+
+   <detailed description of what was changed and why>
+
+   Key changes:
+   - <bullet point 1>
+   - <bullet point 2>
+   - <bullet point 3>
+
+   🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+
+   # Verify commit was created
+   git log -1 --stat
+   ```
+   - **NEVER leave uncommitted changes** - every completed task must be committed
+   - Include clear, descriptive commit messages explaining what and why
+   - Stage all relevant files (code, tests, docs)
+   - Verify commit was created successfully with `git log -1 --stat`
+   - This ensures work is saved, tracked, and can be reviewed/reverted if needed
+
 ---
 
 **This architecture is intentionally strict to serve as a proof-of-concept. The zero-violation requirement is non-negotiable.**
@@ -753,8 +784,10 @@ The tool validates 5 types of architectural violations:
 ║  NEVER COMMIT CODE WITHOUT TESTS                                            ║
 ║  NEVER TEST MANUALLY WITH BASH COMMANDS                                     ║
 ║  ALWAYS WRITE AUTOMATED TESTS                                               ║
+║  ALWAYS COMMIT YOUR CHANGES WHEN DONE                                       ║
 ║                                                                              ║
 ║  Tests are NOT optional - they are the ONLY way to verify behavior          ║
+║  Commits are NOT optional - they are the ONLY way to save work              ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
