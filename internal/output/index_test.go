@@ -314,8 +314,8 @@ func TestGenerateIndexDocumentation_ContainsAgentGuidance(t *testing.T) {
 	if !strings.Contains(result, "-format=markdown") {
 		t.Error("Expected markdown format guidance")
 	}
-	if !strings.Contains(result, "arch-generated.md") {
-		t.Error("Expected reference to full documentation")
+	if !strings.Contains(result, "-format=package") {
+		t.Error("Expected reference to per-package details command")
 	}
 }
 
