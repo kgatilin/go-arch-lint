@@ -282,7 +282,7 @@ func (v *Validator) detectUnexpectedDirectories(requiredDirs map[string]string) 
 					File:  dirName,
 					Issue: fmt.Sprintf("Directory '%s' is not in the required structure", dirName),
 					Rule:  "allow_other_directories is set to false - only required directories are allowed",
-					Fix:   fmt.Sprintf("Remove directory or add to required_directories in .goarchlint"),
+					Fix:   "Remove directory or add to required_directories in .goarchlint",
 				})
 			}
 		}
@@ -800,9 +800,9 @@ func (v *Validator) validateTestFileLocations() []Violation {
 				violations = append(violations, Violation{
 					Type:  ViolationTestFileLocation,
 					File:  relPath,
-					Issue: fmt.Sprintf("Test file is in separate tests/ directory"),
+					Issue: "Test file is in separate tests/ directory",
 					Rule:  "Test files should be colocated with the code they test (location: colocated)",
-					Fix:   fmt.Sprintf("Move test file to the same directory as the code it tests"),
+					Fix:   "Move test file to the same directory as the code it tests",
 				})
 			}
 
@@ -812,9 +812,9 @@ func (v *Validator) validateTestFileLocations() []Violation {
 				violations = append(violations, Violation{
 					Type:  ViolationTestFileLocation,
 					File:  relPath,
-					Issue: fmt.Sprintf("Test file is colocated with code instead of in tests/ directory"),
+					Issue: "Test file is colocated with code instead of in tests/ directory",
 					Rule:  "Test files should be in a separate tests/ directory (location: separate)",
-					Fix:   fmt.Sprintf("Move test file to tests/ directory mirroring the source structure"),
+					Fix:   "Move test file to tests/ directory mirroring the source structure",
 				})
 			}
 		}
