@@ -25,14 +25,14 @@
 ### cmd (Application Entry Points)
 
 - **main** (`cmd/go-arch-lint`)
-  - Files: 2 | Exports: 24
+  - Files: 2 | Exports: 0
   - **Details**: `go-arch-lint -format=package cmd/go-arch-lint`
 
 
 ### pkg (Public APIs)
 
 - **linter** (`pkg/linter`)
-  - Files: 3 | Exports: 51
+  - Files: 3 | Exports: 26
   - Key exports: GetNodes, GetRelPath, GetPackage
   - **Details**: `go-arch-lint -format=package pkg/linter`
 
@@ -40,32 +40,32 @@
 ### internal (Isolated Primitives)
 
 - **config** (`internal/config`)
-  - Files: 2 | Exports: 43
+  - Files: 2 | Exports: 27
   - Key exports: Config, PresetSection, OverridesSection
   - **Details**: `go-arch-lint -format=package internal/config`
 
 - **coverage** (`internal/coverage`)
-  - Files: 2 | Exports: 22
+  - Files: 2 | Exports: 13
   - Key exports: Config, PackageCoverage, GetPackagePath
   - **Details**: `go-arch-lint -format=package internal/coverage`
 
 - **graph** (`internal/graph`)
-  - Files: 2 | Exports: 26
+  - Files: 2 | Exports: 14
   - Key exports: FileInfo, Dependency, GetImportPath
   - **Details**: `go-arch-lint -format=package internal/graph`
 
 - **output** (`internal/output`)
-  - Files: 6 | Exports: 83
+  - Files: 6 | Exports: 20
   - Key exports: StructureInfo, RulesInfo, FullDocumentation
   - **Details**: `go-arch-lint -format=package internal/output`
 
 - **scanner** (`internal/scanner`)
-  - Files: 2 | Exports: 40
+  - Files: 2 | Exports: 21
   - Key exports: FileInfo, ImportUsage, GetImportPath
   - **Details**: `go-arch-lint -format=package internal/scanner`
 
 - **validator** (`internal/validator`)
-  - Files: 2 | Exports: 84
+  - Files: 2 | Exports: 31
   - Key exports: Config, PackageCoverage, Dependency
   - **Details**: `go-arch-lint -format=package internal/validator`
 
