@@ -2,28 +2,79 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+```
+════════════════════════════════════════════════════════════════════════════════
+                        ⚠️  MOST IMPORTANT RULE  ⚠️
+════════════════════════════════════════════════════════════════════════════════
+
+NEVER run manual bash commands to test functionality.
+ALWAYS write E2E tests in cmd/go-arch-lint/main_test.go instead.
+
+❌ WRONG: ./go-arch-lint . | grep "something"
+✅ RIGHT: Write test, run go test ./cmd/go-arch-lint -v
+
+See "CRITICAL: Testing Requirements" section below for details.
+
+════════════════════════════════════════════════════════════════════════════════
+```
+
 ## Project Overview
 
 go-arch-lint is a Go architecture linter that enforces strict dependency rules between packages. **Critically, this project validates itself** - it follows the exact architectural rules it enforces, with zero violations. This makes the codebase both an implementation and a proof-of-concept.
 
 The project uses a strict 3-layer architecture with **complete isolation of internal packages**: `cmd → pkg → internal`, where `internal: []` means internal packages cannot import each other.
 
-## CRITICAL: Testing Requirements
+## ⚠️⚠️⚠️ CRITICAL: TESTING REQUIREMENTS ⚠️⚠️⚠️
 
-**⚠️ ALL TESTING MUST BE DONE THROUGH AUTOMATED TESTS - NEVER MANUAL COMMANDS ⚠️**
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║  ALL TESTING MUST BE DONE THROUGH AUTOMATED TESTS - NEVER MANUAL COMMANDS   ║
+║                                                                              ║
+║  DO NOT RUN ./go-arch-lint MANUALLY TO TEST CHANGES                         ║
+║  DO NOT RUN bash commands in /tmp TO VERIFY BEHAVIOR                        ║
+║  DO NOT CHECK OUTPUT BY RUNNING THE BINARY YOURSELF                         ║
+║                                                                              ║
+║  ✅ WRITE E2E TESTS THAT BUILD THE BINARY AND RUN IT AS A SUBPROCESS        ║
+║  ✅ VERIFY BEHAVIOR THROUGH AUTOMATED TEST ASSERTIONS                       ║
+║  ✅ TESTS RUN FOREVER - MANUAL COMMANDS VERIFY NOTHING LONG-TERM            ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```
 
-When implementing any new functionality or making changes:
+### Why Manual Commands Are WRONG
 
-### Testing Rules (NON-NEGOTIABLE)
+**Manual bash commands are NOT testing:**
+- ❌ They don't run in CI/CD
+- ❌ They don't prevent regressions
+- ❌ They can't be reproduced by others
+- ❌ They waste time every time you need to verify
+- ❌ They give false confidence
+- ❌ They don't catch edge cases systematically
 
-1. **NEVER use manual bash commands or temporary directories to test functionality**
+**E2E tests ARE testing:**
+- ✅ Run automatically on every change
+- ✅ Catch regressions forever
+- ✅ Document expected behavior
+- ✅ Run in seconds, verify comprehensively
+- ✅ Test real-world usage (flags, exit codes, output)
+- ✅ Build confidence through automation
+
+### Testing Rules (100% NON-NEGOTIABLE)
+
+1. **NEVER EVER use manual bash commands to test functionality**
+   - ❌ WRONG: `./go-arch-lint . 2>&1 | grep "Whitebox Test"`
    - ❌ WRONG: `cd /tmp && mkdir test-project && ./go-arch-lint init`
+   - ❌ WRONG: `./go-arch-lint . | head -50` (checking output manually)
+   - ❌ WRONG: Building binary and running it to "see if it works"
    - ✅ RIGHT: Write E2E test in `cmd/go-arch-lint/main_test.go`
+   - ✅ RIGHT: Let the test build binary, run it, verify output
 
 2. **ALL new CLI commands or flags MUST have E2E tests**
    - E2E tests build the binary and run it as subprocess
    - Test real-world usage: flags, exit codes, stdout/stderr
    - Located in: `cmd/go-arch-lint/main_test.go`
+   - **Build binary ONCE per test suite** using TestMain
 
 3. **ALL new business logic MUST have unit tests**
    - Test individual functions and types in isolation
@@ -32,6 +83,10 @@ When implementing any new functionality or making changes:
 4. **ALL new public API endpoints MUST have integration tests**
    - Test multiple components working together
    - Located in: `pkg/linter/linter_test.go`
+
+5. **VERIFICATION means running `go test ./...` - NOT running the binary manually**
+   - Tests verify behavior permanently
+   - Manual commands verify nothing long-term
 
 ### Which Test Type to Use
 
@@ -51,29 +106,97 @@ When implementing any new functionality or making changes:
 - Testing configuration parsing, graph building, validation logic
 - Testing output formatting
 
-### Example: Adding a New CLI Command
+### WRONG vs RIGHT: Complete Example
+
+#### ❌ WRONG Approach (DO NOT DO THIS)
+
+```
+# What you might be tempted to do:
+1. Implement feature in code
+2. Build binary: go build -o go-arch-lint ./cmd/go-arch-lint
+3. Run manually: ./go-arch-lint . 2>&1 | grep "something"
+4. Check output: ./go-arch-lint . | head -50
+5. Try different flags: ./go-arch-lint --flag . | tail -20
+6. Create temp directory: cd /tmp && mkdir test-project
+7. Run there: ./go-arch-lint init
+8. Check if it works visually
+9. Commit code
+
+❌ PROBLEMS:
+- No automated verification
+- Wastes time on every change
+- Doesn't prevent regressions
+- Other developers can't reproduce
+- CI/CD doesn't verify
+- You'll forget what you tested
+```
+
+#### ✅ RIGHT Approach (ALWAYS DO THIS)
+
+```
+# Correct workflow:
+1. Implement feature in code
+2. Write E2E test immediately
+3. Run go test ./cmd/go-arch-lint -v
+4. See test PASS
+5. Commit code + test together
+
+✅ BENEFITS:
+- Automated verification forever
+- Runs in seconds on every change
+- Prevents regressions
+- Documents expected behavior
+- Works in CI/CD
+- Other developers can verify
+```
+
+#### ✅ RIGHT Example Code
 
 ```go
-// WRONG: Testing manually
-❌ cd /tmp && mkdir test && ./go-arch-lint newcommand
-
-// RIGHT: E2E test in cmd/go-arch-lint/main_test.go
-✅ func TestCLI_NewCommand(t *testing.T) {
-    binary := buildBinary(t)
+// cmd/go-arch-lint/main_test.go
+func TestCLI_NewFeature_OutputFormat(t *testing.T) {
     tmpDir := t.TempDir()
-    // ... create test project ...
-    cmd := exec.Command(binary, "newcommand", ".")
+
+    // Setup test project
+    createTestProject(t, tmpDir)
+
+    // Run binary (uses binaryPath from TestMain - built once)
+    cmd := exec.Command(binaryPath, "--flag", ".")
     cmd.Dir = tmpDir
     output, err := cmd.CombinedOutput()
-    // ... assertions ...
+    outputStr := string(output)
+
+    // Verify exit code
+    if err != nil {
+        t.Fatalf("unexpected error: %v\nOutput: %s", err, output)
+    }
+
+    // Verify output contains expected content
+    if !strings.Contains(outputStr, "Expected String") {
+        t.Errorf("expected output to contain 'Expected String', got: %s", outputStr)
+    }
+
+    // Verify specific section appears exactly once
+    count := strings.Count(outputStr, "SECTION HEADER")
+    if count != 1 {
+        t.Errorf("expected exactly 1 'SECTION HEADER', got %d", count)
+    }
+
+    // Verify content is NOT duplicated
+    violationsSection := extractSection(outputStr, "VIOLATIONS", "END_MARKER")
+    if strings.Count(violationsSection, "REPEATED_TEXT") > 1 {
+        t.Error("expected 'REPEATED_TEXT' to appear once, but it's duplicated")
+    }
 }
 ```
 
 **Before any code is considered complete:**
-1. Write tests FIRST (or immediately after implementation)
-2. Run `go test ./...` - ALL tests must pass
-3. Run `./go-arch-lint .` - ZERO violations required
-4. Never commit code without corresponding tests
+1. ✅ Write E2E test (or unit/integration test as appropriate)
+2. ✅ Run `go test ./...` - ALL tests MUST pass
+3. ✅ Run `go test ./cmd/go-arch-lint -v` - verify E2E tests pass
+4. ✅ Optionally run `./go-arch-lint .` ONCE to verify zero violations
+5. ✅ Commit code + tests together
+6. ✅ NEVER commit without tests
 
 ## Development Workflow: Using the Junior Developer Agent
 
@@ -541,7 +664,26 @@ The tool validates 5 types of architectural violations:
 
 ## Common Pitfalls
 
-❌ **Testing manually with bash commands** - NEVER use `cd /tmp && ./go-arch-lint test`. ALWAYS write E2E/integration/unit tests. See "CRITICAL: Testing Requirements" section.
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          #1 MOST COMMON MISTAKE                              ║
+║                                                                              ║
+║  ❌ RUNNING MANUAL BASH COMMANDS TO TEST CHANGES                            ║
+║                                                                              ║
+║  DO NOT: ./go-arch-lint . | grep "something"                                ║
+║  DO NOT: cd /tmp && ./go-arch-lint init                                     ║
+║  DO NOT: Check output manually to verify behavior                           ║
+║                                                                              ║
+║  INSTEAD: Write E2E test in cmd/go-arch-lint/main_test.go                   ║
+║  VERIFY: Run go test ./cmd/go-arch-lint -v                                  ║
+║                                                                              ║
+║  See "CRITICAL: Testing Requirements" section above                         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Other Common Mistakes
+
+❌ **Testing manually with bash commands** - NEVER use `cd /tmp && ./go-arch-lint test`. ALWAYS write E2E/integration/unit tests. This is THE most common mistake. See "CRITICAL: Testing Requirements" section.
 
 ❌ **Importing between internal packages** - Will create violations. Use interfaces instead.
 
@@ -557,18 +699,37 @@ The tool validates 5 types of architectural violations:
 
 ## Before Committing
 
-**CHECKLIST (All items mandatory):**
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                           COMMIT CHECKLIST                                   ║
+║                                                                              ║
+║  ⚠️  DO NOT COMMIT WITHOUT RUNNING THIS CHECKLIST                           ║
+║  ⚠️  ALL ITEMS ARE MANDATORY - NO EXCEPTIONS                                ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```
 
-1. **✅ Tests written**: Every new feature/change MUST have corresponding tests
-   - CLI commands → E2E tests in `cmd/go-arch-lint/main_test.go`
+**MANDATORY CHECKLIST (100% Required):**
+
+1. **✅ Tests written FIRST**: Every new feature/change MUST have corresponding automated tests
+   - CLI commands/flags → E2E tests in `cmd/go-arch-lint/main_test.go`
    - Public API → Integration tests in `pkg/linter/linter_test.go`
    - Internal logic → Unit tests in `internal/*/` packages
+   - **NO MANUAL BASH COMMANDS** - only automated tests count
 
-2. **✅ All tests pass**: `go test ./...` (ensure test coverage stays at 70-80%+)
+2. **✅ All tests pass**: Run `go test ./...` and verify ALL tests pass
+   - Ensure test coverage stays at 70-80%+
+   - Run `go test ./cmd/go-arch-lint -v` to verify E2E tests specifically
+   - **This is verification** - not running `./go-arch-lint` manually
 
-3. **✅ Zero violations**: `./go-arch-lint .` (must show zero violations)
+3. **✅ Zero architectural violations**: Run `./go-arch-lint .` ONCE to verify
+   - Must show zero violations
+   - This is the ONLY acceptable manual command
+   - Used for self-validation, not feature testing
 
-4. **✅ Binary builds**: `go build -o go-arch-lint ./cmd/go-arch-lint`
+4. **✅ Binary builds**: Run `go build -o go-arch-lint ./cmd/go-arch-lint`
+   - Verify no compilation errors
+   - This is a sanity check, not testing
 
 5. **✅ Update generated documentation** (if changes affect architecture, public API, CLI flags, or usage):
    ```bash
@@ -586,13 +747,25 @@ The tool validates 5 types of architectural violations:
    - Update output examples if format changed
    - Keep README aligned with actual tool behavior
 
-7. **✅ Verify alignment**: Check that new public APIs and dependencies align with @docs/arch_generated.md
+7. **✅ Verify alignment**: Check that new public APIs and dependencies align with docs/arch-generated.md
 
 8. **✅ Architecture compliance**:
    - New domain logic is in an `internal/` package
    - Modified interfaces have updated adapters in `pkg/linter/linter.go` and test files
    - No internal package imports other internal packages
 
+---
+
 **This architecture is intentionally strict to serve as a proof-of-concept. The zero-violation requirement is non-negotiable.**
 
-**NEVER commit code without tests. NEVER test manually with bash commands. ALWAYS write automated tests.**
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║  NEVER COMMIT CODE WITHOUT TESTS                                            ║
+║  NEVER TEST MANUALLY WITH BASH COMMANDS                                     ║
+║  ALWAYS WRITE AUTOMATED TESTS                                               ║
+║                                                                              ║
+║  Tests are NOT optional - they are the ONLY way to verify behavior          ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```

@@ -855,21 +855,8 @@ func (v *Validator) validateBlackboxTests() []Violation {
 				File:  relPath,
 				Line:  1, // Package declaration is typically on line 1
 				Issue: fmt.Sprintf("Test file uses whitebox testing (package %s instead of %s)", packageName, expectedPkg),
-				Rule: `Blackbox testing is enforced to ensure tests validate the public API, not internal implementation.
-
-WHY THIS MATTERS:
-• Tests should verify behavior through the public interface, making them resilient to internal refactoring
-• If you can't test through the public API, it may indicate design issues with your component's interface
-• Blackbox tests encourage better API design and reduce coupling between tests and implementation
-• When internals change, blackbox tests remain valid as long as the public contract is maintained
-
-This is a Go best practice: the standard library and most Go projects use blackbox tests (package foo_test) for package-level testing.`,
-				Fix: fmt.Sprintf(`Change package declaration from 'package %s' to 'package %s'
-
-After changing to blackbox testing:
-1. Import your package: import "your-module/%s"
-2. Test only through exported (capitalized) functions, types, and methods
-3. If you can't test adequately through the public API, consider whether your API design needs improvement`, packageName, expectedPkg, filepath.Dir(relPath)),
+				Rule:  "Blackbox testing is enforced to ensure tests validate the public API, not internal implementation",
+				Fix:   fmt.Sprintf("Change package declaration from 'package %s' to 'package %s'", packageName, expectedPkg),
 			})
 		}
 	}

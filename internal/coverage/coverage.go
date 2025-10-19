@@ -62,16 +62,33 @@ func (r *Runner) Run(scanPaths []string) ([]PackageCoverage, error) {
 		return nil, fmt.Errorf("finding packages: %w", err)
 	}
 
-	for _, pkg := range packages {
+	if len(packages) == 0 {
+		return results, nil
+	}
+
+	// Print header
+	fmt.Printf("\n🔍 Running test coverage analysis for %d packages...\n\n", len(packages))
+
+	for i, pkg := range packages {
+		// Show progress
+		fmt.Printf("  [%d/%d] Testing %s...", i+1, len(packages), getShortPackageName(pkg, r.moduleName))
+
 		coverage, hasTests, err := r.runCoverageForPackage(pkg)
 		if err != nil {
 			// If coverage fails (e.g., no test files), record 0% with hasTests=false
+			fmt.Printf(" no tests\n")
 			results = append(results, PackageCoverage{
 				PackagePath: pkg,
 				Coverage:    0,
 				hasTests:    false,
 			})
 			continue
+		}
+
+		if !hasTests {
+			fmt.Printf(" no tests\n")
+		} else {
+			fmt.Printf(" %.1f%%\n", coverage)
 		}
 
 		results = append(results, PackageCoverage{
@@ -81,7 +98,168 @@ func (r *Runner) Run(scanPaths []string) ([]PackageCoverage, error) {
 		})
 	}
 
+	fmt.Println() // Empty line after progress
+
 	return results, nil
+}
+
+// getShortPackageName extracts the relative package name from full import path
+func getShortPackageName(pkgPath, moduleName string) string {
+	if moduleName != "" && strings.HasPrefix(pkgPath, moduleName+"/") {
+		return strings.TrimPrefix(pkgPath, moduleName+"/")
+	}
+	return pkgPath
+}
+
+// DirectorySummary represents coverage summary for a directory
+type DirectorySummary struct {
+	Directory      string
+	PackageCount   int
+	TestedPackages int
+	TotalLines     int
+	CoveredLines   int
+	AvgCoverage    float64
+}
+
+// SummarizeBybDirectory groups coverage results by top-level directory
+func SummarizeByDirectory(results []PackageCoverage, moduleName string, scanPaths []string) []DirectorySummary {
+	// Group by directory
+	dirStats := make(map[string]*DirectorySummary)
+
+	for _, result := range results {
+		// Get relative package path
+		relPath := getShortPackageName(result.PackagePath, moduleName)
+
+		// Extract top-level directory
+		parts := strings.Split(relPath, "/")
+		if len(parts) == 0 {
+			continue
+		}
+		topDir := parts[0]
+
+		// Initialize if not exists
+		if _, exists := dirStats[topDir]; !exists {
+			dirStats[topDir] = &DirectorySummary{
+				Directory: topDir,
+			}
+		}
+
+		stats := dirStats[topDir]
+		stats.PackageCount++
+		if result.hasTests {
+			stats.TestedPackages++
+		}
+		// Accumulate coverage for averaging
+		stats.AvgCoverage += result.Coverage
+	}
+
+	// Calculate averages and sort by directory name
+	var summaries []DirectorySummary
+	for dir, stats := range dirStats {
+		if stats.PackageCount > 0 {
+			stats.AvgCoverage = stats.AvgCoverage / float64(stats.PackageCount)
+		}
+		stats.Directory = dir
+		summaries = append(summaries, *stats)
+	}
+
+	// Sort by directory name to match scan order
+	sortedSummaries := make([]DirectorySummary, 0, len(scanPaths))
+	for _, scanPath := range scanPaths {
+		for _, summary := range summaries {
+			if summary.Directory == scanPath {
+				sortedSummaries = append(sortedSummaries, summary)
+				break
+			}
+		}
+	}
+
+	// Add any directories not in scanPaths
+	for _, summary := range summaries {
+		found := false
+		for _, existing := range sortedSummaries {
+			if existing.Directory == summary.Directory {
+				found = true
+				break
+			}
+		}
+		if !found {
+			sortedSummaries = append(sortedSummaries, summary)
+		}
+	}
+
+	return sortedSummaries
+}
+
+// PrintSummary displays a formatted coverage summary table
+func PrintSummary(summaries []DirectorySummary, overallCoverage float64) {
+	if len(summaries) == 0 {
+		return
+	}
+
+	fmt.Println("📊 Coverage Summary by Directory:")
+	fmt.Println()
+	fmt.Println("┌────────────────────┬──────────┬─────────┬──────────────┐")
+	fmt.Println("│ Directory          │ Packages │ Tested  │ Coverage     │")
+	fmt.Println("├────────────────────┼──────────┼─────────┼──────────────┤")
+
+	for _, summary := range summaries {
+		coverageBar := getCoverageBar(summary.AvgCoverage)
+		fmt.Printf("│ %-18s │ %8d │ %7d │ %5.1f%% %s │\n",
+			truncate(summary.Directory, 18),
+			summary.PackageCount,
+			summary.TestedPackages,
+			summary.AvgCoverage,
+			coverageBar,
+		)
+	}
+
+	fmt.Println("├────────────────────┴──────────┴─────────┼──────────────┤")
+	overallBar := getCoverageBar(overallCoverage)
+	fmt.Printf("│ Overall Project Coverage                │ %5.1f%% %s │\n", overallCoverage, overallBar)
+	fmt.Println("└──────────────────────────────────────────┴──────────────┘")
+	fmt.Println()
+}
+
+// getCoverageBar returns a visual bar representation of coverage
+func getCoverageBar(coverage float64) string {
+	barLength := 3
+	filled := int((coverage / 100.0) * float64(barLength))
+	if filled > barLength {
+		filled = barLength
+	}
+
+	bar := ""
+	for i := 0; i < filled; i++ {
+		bar += "█"
+	}
+	for i := filled; i < barLength; i++ {
+		bar += "░"
+	}
+
+	return bar
+}
+
+// truncate truncates a string to maxLen
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
+// CalculateOverallCoverage computes the overall project coverage
+func CalculateOverallCoverage(results []PackageCoverage) float64 {
+	if len(results) == 0 {
+		return 0
+	}
+
+	totalCoverage := 0.0
+	for _, result := range results {
+		totalCoverage += result.Coverage
+	}
+
+	return totalCoverage / float64(len(results))
 }
 
 // findPackages discovers all Go packages in the specified paths

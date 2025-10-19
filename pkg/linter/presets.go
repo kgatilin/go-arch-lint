@@ -10,14 +10,15 @@ import (
 
 // Preset represents a predefined project structure template
 type Preset struct {
-	Name                string
-	Description         string
-	Config              PresetConfig
-	ArchitecturalGoals  string
-	Principles          []string
-	ViolationContext    map[string]string
-	RefactoringGuidance string
-	CoverageGuidance    string
+	Name                     string
+	Description              string
+	Config                   PresetConfig
+	ArchitecturalGoals       string
+	Principles               []string
+	ViolationContext         map[string]string
+	RefactoringGuidance      string
+	CoverageGuidance         string
+	BlackboxTestingGuidance  string
 }
 
 // PresetConfig mirrors the config structure for YAML generation
@@ -118,6 +119,24 @@ Coverage thresholds reflect the criticality of each layer:
 - Application: Use case orchestration, service coordination, transaction boundaries
 - Infrastructure: Adapter implementations, data mapping, external API integration logic
 - CLI: Flag parsing, command routing, basic end-to-end workflows
+`,
+			BlackboxTestingGuidance: `
+**Why Blackbox Testing Matters:**
+
+Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavior through the public API, making them more resilient to internal refactoring.
+
+- Tests should verify behavior through the public interface, not internal implementation details
+- If you can't test adequately through the public API, it may indicate design issues with your component's interface
+- Blackbox tests encourage better API design and reduce coupling between tests and implementation
+- When internals change, blackbox tests remain valid as long as the public contract is maintained
+
+**This is a Go best practice:** The standard library and most Go projects use blackbox tests (package foo_test) for package-level testing.
+
+**How to convert to blackbox testing:**
+1. Change package declaration from 'package foo' to 'package foo_test' in test files
+2. Import your package: import "your-module/path/to/foo"
+3. Test only through exported (capitalized) functions, types, and methods
+4. If you can't test adequately through the public API, consider whether your API design needs improvement
 `,
 			Config: PresetConfig{
 				Structure: PresetStructure{
@@ -230,6 +249,24 @@ Coverage thresholds reflect the purpose of each layer:
 - internal/: All core business logic, data structures, algorithms, validation
 - pkg/: Public API functions, error handling, interface contracts
 - cmd/: CLI flag parsing, command execution, basic end-to-end workflows
+`,
+			BlackboxTestingGuidance: `
+**Why Blackbox Testing Matters:**
+
+Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavior through the public API, making them more resilient to internal refactoring.
+
+- Tests should verify behavior through the public interface, not internal implementation details
+- If you can't test adequately through the public API, it may indicate design issues with your component's interface
+- Blackbox tests encourage better API design and reduce coupling between tests and implementation
+- When internals change, blackbox tests remain valid as long as the public contract is maintained
+
+**This is a Go best practice:** The standard library and most Go projects use blackbox tests (package foo_test) for package-level testing.
+
+**How to convert to blackbox testing:**
+1. Change package declaration from 'package foo' to 'package foo_test' in test files
+2. Import your package: import "your-module/path/to/foo"
+3. Test only through exported (capitalized) functions, types, and methods
+4. If you can't test adequately through the public API, consider whether your API design needs improvement
 `,
 			Config: PresetConfig{
 				Structure: PresetStructure{
@@ -349,6 +386,24 @@ Coverage thresholds reflect hexagonal principles:
 - Adapters: Data transformation, error handling, integration with external systems (use mocks)
 - CLI: Dependency wiring, startup sequence, basic command execution
 `,
+			BlackboxTestingGuidance: `
+**Why Blackbox Testing Matters:**
+
+Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavior through the public API, making them more resilient to internal refactoring.
+
+- Tests should verify behavior through the public interface, not internal implementation details
+- If you can't test adequately through the public API, it may indicate design issues with your component's interface
+- Blackbox tests encourage better API design and reduce coupling between tests and implementation
+- When internals change, blackbox tests remain valid as long as the public contract is maintained
+
+**This is a Go best practice:** The standard library and most Go projects use blackbox tests (package foo_test) for package-level testing.
+
+**How to convert to blackbox testing:**
+1. Change package declaration from 'package foo' to 'package foo_test' in test files
+2. Import your package: import "your-module/path/to/foo"
+3. Test only through exported (capitalized) functions, types, and methods
+4. If you can't test adequately through the public API, consider whether your API design needs improvement
+`,
 			Config: PresetConfig{
 				Structure: PresetStructure{
 					RequiredDirectories: map[string]string{
@@ -444,11 +499,12 @@ func CreateConfigFromPreset(projectPath, presetName string, createDirs bool) err
 		Module:     module,
 		PresetUsed: presetName,
 		ErrorPrompt: ErrorPromptConfig{
-			Enabled:             true,
-			ArchitecturalGoals:  preset.ArchitecturalGoals,
-			Principles:          preset.Principles,
-			RefactoringGuidance: preset.RefactoringGuidance,
-			CoverageGuidance:    preset.CoverageGuidance,
+			Enabled:                  true,
+			ArchitecturalGoals:       preset.ArchitecturalGoals,
+			Principles:               preset.Principles,
+			RefactoringGuidance:      preset.RefactoringGuidance,
+			CoverageGuidance:         preset.CoverageGuidance,
+			BlackboxTestingGuidance:  preset.BlackboxTestingGuidance,
 		},
 		Structure: preset.Config.Structure,
 		Rules:     preset.Config.Rules,
@@ -486,11 +542,12 @@ func CreateConfigFromPreset(projectPath, presetName string, createDirs bool) err
 
 // ErrorPromptConfig for YAML serialization
 type ErrorPromptConfig struct {
-	Enabled             bool     `yaml:"enabled"`
-	ArchitecturalGoals  string   `yaml:"architectural_goals,omitempty"`
-	Principles          []string `yaml:"principles,omitempty"`
-	RefactoringGuidance string   `yaml:"refactoring_guidance,omitempty"`
-	CoverageGuidance    string   `yaml:"coverage_guidance,omitempty"`
+	Enabled                  bool     `yaml:"enabled"`
+	ArchitecturalGoals       string   `yaml:"architectural_goals,omitempty"`
+	Principles               []string `yaml:"principles,omitempty"`
+	RefactoringGuidance      string   `yaml:"refactoring_guidance,omitempty"`
+	CoverageGuidance         string   `yaml:"coverage_guidance,omitempty"`
+	BlackboxTestingGuidance  string   `yaml:"blackbox_testing_guidance,omitempty"`
 }
 
 func detectModuleFromGoMod(projectPath string) (string, error) {
@@ -587,11 +644,12 @@ func RefreshConfigFromPreset(projectPath, presetName string) error {
 		Module:     module,
 		PresetUsed: presetName,
 		ErrorPrompt: ErrorPromptConfig{
-			Enabled:             true,
-			ArchitecturalGoals:  preset.ArchitecturalGoals,
-			Principles:          preset.Principles,
-			RefactoringGuidance: preset.RefactoringGuidance,
-			CoverageGuidance:    preset.CoverageGuidance,
+			Enabled:                  true,
+			ArchitecturalGoals:       preset.ArchitecturalGoals,
+			Principles:               preset.Principles,
+			RefactoringGuidance:      preset.RefactoringGuidance,
+			CoverageGuidance:         preset.CoverageGuidance,
+			BlackboxTestingGuidance:  preset.BlackboxTestingGuidance,
 		},
 		Structure: preset.Config.Structure,
 		Rules:     preset.Config.Rules,

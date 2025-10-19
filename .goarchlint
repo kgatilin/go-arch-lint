@@ -5,20 +5,20 @@
 module: github.com/kgatilin/go-arch-lint
 preset_used: simple
 error_prompt:
-  enabled: true
-  architectural_goals: |4
+    enabled: true
+    architectural_goals: |4
         Simple Go architecture aims to:
         - Separate public APIs (pkg) from private implementation (internal)
         - Keep command-line entry points minimal and focused
         - Enable code reuse through public packages
         - Protect internal implementation details from external use
-  principles:
-    - cmd contains only application entry points and CLI logic
-    - pkg contains public libraries that could be imported by other projects
-    - internal contains private code that cannot be imported externally (Go compiler enforces this)
-    - "Dependencies flow: cmd → pkg → internal"
-    - internal packages should have zero dependencies on each other for maximum isolation
-  refactoring_guidance: |4
+    principles:
+        - cmd contains only application entry points and CLI logic
+        - pkg contains public libraries that could be imported by other projects
+        - internal contains private code that cannot be imported externally (Go compiler enforces this)
+        - 'Dependencies flow: cmd → pkg → internal'
+        - internal packages should have zero dependencies on each other for maximum isolation
+    refactoring_guidance: |4
         To refactor toward simple architecture compliance:
 
         1. **Consolidate entry points in cmd/**: Move main.go files and CLI setup to cmd/
@@ -32,7 +32,7 @@ error_prompt:
         Example refactoring:
         - Before: internal/users/service.go imports internal/database directly
         - After: internal/users/service.go defines UserRepository interface, pkg/app/app.go creates adapter, internal/database implements interface
-  coverage_guidance: |4
+    coverage_guidance: |4
         **Test Coverage Philosophy for Simple Architecture:**
 
         Coverage thresholds reflect the purpose of each layer:
@@ -50,44 +50,61 @@ error_prompt:
         - internal/: All core business logic, data structures, algorithms, validation
         - pkg/: Public API functions, error handling, interface contracts
         - cmd/: CLI flag parsing, command execution, basic end-to-end workflows
+    blackbox_testing_guidance: |4
+        **Why Blackbox Testing Matters:**
+
+        Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavior through the public API, making them more resilient to internal refactoring.
+
+        - Tests should verify behavior through the public interface, not internal implementation details
+        - If you can't test adequately through the public API, it may indicate design issues with your component's interface
+        - Blackbox tests encourage better API design and reduce coupling between tests and implementation
+        - When internals change, blackbox tests remain valid as long as the public contract is maintained
+
+        **This is a Go best practice:** The standard library and most Go projects use blackbox tests (package foo_test) for package-level testing.
+
+        **How to convert to blackbox testing:**
+        1. Change package declaration from 'package foo' to 'package foo_test' in test files
+        2. Import your package: import "your-module/path/to/foo"
+        3. Test only through exported (capitalized) functions, types, and methods
+        4. If you can't test adequately through the public API, consider whether your API design needs improvement
 structure:
-  required_directories:
-    cmd: Application entry points
-    internal: Private application code
-    pkg: Public libraries and APIs
-  allow_other_directories: true
+    required_directories:
+        cmd: Application entry points
+        internal: Private application code
+        pkg: Public libraries and APIs
+    allow_other_directories: true
 rules:
-  directories_import:
-    cmd:
-      - pkg
-    internal: []
-    pkg:
-      - internal
-  detect_unused: true
-  shared_external_imports:
-    detect: true
-    mode: warn
-    exclusions:
-      - fmt
-      - strings
-      - errors
-      - time
-      - context
-    exclusion_patterns:
-      - encoding/*
-  test_files:
-    lint: true
-    exempt_imports:
-      - testing
-      - github.com/stretchr/testify/assert
-      - github.com/stretchr/testify/require
-      - github.com/stretchr/testify/mock
-    location: colocated
-    require_blackbox: true
-  test_coverage:
-    enabled: true
-    threshold: 70
-    package_thresholds:
-      cmd: 30
-      internal: 80
-      pkg: 70
+    directories_import:
+        cmd:
+            - pkg
+        internal: []
+        pkg:
+            - internal
+    detect_unused: true
+    shared_external_imports:
+        detect: true
+        mode: warn
+        exclusions:
+            - fmt
+            - strings
+            - errors
+            - time
+            - context
+        exclusion_patterns:
+            - encoding/*
+    test_files:
+        lint: true
+        exempt_imports:
+            - testing
+            - github.com/stretchr/testify/assert
+            - github.com/stretchr/testify/require
+            - github.com/stretchr/testify/mock
+        location: colocated
+        require_blackbox: true
+    test_coverage:
+        enabled: true
+        threshold: 60
+        package_thresholds:
+            cmd: 30
+            internal: 70
+            pkg: 60

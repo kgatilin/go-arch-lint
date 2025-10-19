@@ -1262,26 +1262,27 @@ func TestValidateBlackboxTests_WhiteboxDetected(t *testing.T) {
 		t.Error("Expected whitebox violation for pkg/database/db_test.go")
 	}
 
-	// Verify educational content is present in violation messages
+	// Verify violations are concise (educational content is in separate guidance section)
 	for _, viol := range violations {
 		if viol.Type == ViolationWhiteboxTest {
-			// Check that Rule contains educational content
-			if !strings.Contains(viol.Rule, "WHY THIS MATTERS") {
-				t.Error("Expected Rule to contain 'WHY THIS MATTERS' educational header")
-			}
-			if !strings.Contains(viol.Rule, "public API") {
-				t.Error("Expected Rule to explain public API testing")
-			}
-			if !strings.Contains(viol.Rule, "Go best practice") {
-				t.Error("Expected Rule to mention Go best practices")
+			// Check that Rule is concise
+			if !strings.Contains(viol.Rule, "Blackbox testing is enforced") {
+				t.Errorf("Expected Rule to mention blackbox testing requirement, got: %s", viol.Rule)
 			}
 
-			// Check that Fix contains actionable guidance
-			if !strings.Contains(viol.Fix, "After changing to blackbox testing") {
-				t.Error("Expected Fix to contain actionable guidance")
+			// Rule should NOT contain educational content (that's in guidance section)
+			if strings.Contains(viol.Rule, "WHY THIS MATTERS") {
+				t.Error("Expected Rule to be concise, not contain 'WHY THIS MATTERS' - that belongs in guidance section")
 			}
-			if !strings.Contains(viol.Fix, "Import your package") {
-				t.Error("Expected Fix to explain import step")
+
+			// Check that Fix is concise
+			if !strings.Contains(viol.Fix, "Change package declaration") {
+				t.Errorf("Expected Fix to mention changing package declaration, got: %s", viol.Fix)
+			}
+
+			// Fix should NOT contain detailed steps (that's in guidance section)
+			if strings.Contains(viol.Fix, "After changing to blackbox testing") {
+				t.Error("Expected Fix to be concise, not contain detailed guidance")
 			}
 		}
 	}
