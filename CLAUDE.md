@@ -198,6 +198,65 @@ func TestCLI_NewFeature_OutputFormat(t *testing.T) {
 5. ✅ Commit code + tests together
 6. ✅ NEVER commit without tests
 
+## Architectural Decisions and Agent Consultation
+
+For **complex architectural changes, new features with design implications, or ambiguous requirements**:
+
+1. **Consult strategic-mentor FIRST** - Use the `strategic-mentor` agent to validate the approach before implementation
+2. **Only ask user if needed** - After mentor feedback, only ask the user clarifying questions if issues remain unresolved
+3. **Document decisions** - Update this file with decisions and rationale for future reference
+
+**Example scenarios requiring mentor consultation:**
+- Introducing new documentation formats or generation approaches
+- Changes affecting the core 3-layer architecture
+- New validation rule types or violation categories
+- Significant refactoring affecting multiple internal packages
+- Trade-offs between implementation options
+
+**Mentor provides:**
+- Validation of architectural soundness
+- Implementation strategy recommendations
+- Risk/consideration identification
+- Success criteria definition
+
+---
+
+## Two-Tier Documentation System
+
+**Implemented per mentor validation** (consult strategic-mentor for architectural decisions).
+
+### Index Documentation (`docs/arch-index.md`)
+- **Lightweight** (~2-5 KB) - loaded by default in agent context
+- **Contents**:
+  - Quick reference (module, status, package/file counts)
+  - Architecture summary (from .goarchlint)
+  - Architectural rules and constraints (layer dependencies, isolation requirements)
+  - Package directory (grouped by layer: cmd, pkg, internal)
+  - Key exports for each package
+  - Agent guidance section with commands for detailed info
+  - Statistics and external dependency count
+
+### Full Documentation (`docs/arch-generated.md`)
+- **Comprehensive** (~50-100+ KB) - loaded on-demand
+- **Contents**:
+  - Everything in index PLUS:
+  - Complete dependency graph with method-level details
+  - Full public API signatures
+  - All violations with detailed context
+  - Used symbols in dependencies
+
+### Generation
+```bash
+./go-arch-lint docs   # Generates BOTH arch-index.md and arch-generated.md
+```
+
+### Agent Workflow
+1. **Default**: Load `docs/arch-index.md` to understand architecture (~2-5 KB context)
+2. **When needed**: Agent sees explicit commands in index guidance to load detailed info
+3. **Full details**: Agent runs suggested commands or loads `docs/arch-generated.md` for deep dives
+
+---
+
 ## Development Workflow: Using the Junior Developer Agent
 
 The junior developer agent is available for **selective delegation** of straightforward, supplementary tasks. However, for most work on this project, **you should implement the core functionality yourself** and only delegate when it genuinely saves time.

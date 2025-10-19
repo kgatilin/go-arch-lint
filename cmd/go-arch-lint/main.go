@@ -33,6 +33,7 @@ DEFAULT COMMAND FLAGS:
         Options:
           markdown  - Dependency graph in markdown
           api       - Public API documentation
+          index     - Lightweight architecture index (quick reference)
           full      - Complete documentation (structure + rules + deps + API)
 
     -detailed
@@ -84,19 +85,25 @@ REFRESH COMMAND:
 DOCS COMMAND:
     go-arch-lint docs [flags] [path]
 
-    Generate comprehensive architecture documentation.
+    Generate both lightweight index and comprehensive architecture documentation.
+    Creates two files: arch-index.md (lightweight, for quick reference) and
+    arch-generated.md (detailed, with full dependency graph and API).
 
     Flags:
         -output string (default: "docs/arch-generated.md")
-            Output file path for generated documentation
+            Output file path for full documentation
+            (Index is always written to docs/arch-index.md)
 
     Examples:
-        go-arch-lint docs                                  # Generate to docs/arch-generated.md
-        go-arch-lint docs --output=ARCHITECTURE.md         # Custom output location
+        go-arch-lint docs                                  # Generates both docs
+        go-arch-lint docs --output=ARCHITECTURE.md         # Custom location for full docs
 
 EXAMPLES:
     # Validate current directory
     go-arch-lint .
+
+    # Show architecture index (quick reference)
+    go-arch-lint -format=index .
 
     # Show dependency graph
     go-arch-lint -format=markdown .
@@ -104,11 +111,11 @@ EXAMPLES:
     # Show detailed method-level dependencies
     go-arch-lint -detailed -format=markdown .
 
-    # Generate full documentation
-    go-arch-lint -format=full .
-
     # Show public API
     go-arch-lint -format=api .
+
+    # Generate both index and full documentation
+    go-arch-lint docs
 
     # Check violations but don't fail CI
     go-arch-lint -exit-zero .
@@ -311,7 +318,7 @@ func showPresetMenu() (string, error) {
 func runDocs() int {
 	// Create a new flag set for docs subcommand
 	docsFlags := flag.NewFlagSet("docs", flag.ExitOnError)
-	outputFlag := docsFlags.String("output", "docs/arch-generated.md", "Output file path")
+	outputFlag := docsFlags.String("output", "docs/arch-generated.md", "Output file path for full documentation")
 
 	// Parse flags starting from os.Args[2] (after "docs")
 	if err := docsFlags.Parse(os.Args[2:]); err != nil {
@@ -332,33 +339,53 @@ func runDocs() int {
 		return 2
 	}
 
-	// Run linter with detailed full documentation
-	fmt.Println("Generating comprehensive documentation...")
+	// Generate index documentation (lightweight)
+	fmt.Println("Generating architecture index...")
+	indexOutput, _, _, err := linter.Run(absPath, "index", false, false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 2
+	}
+
+	// Determine output paths
+	fullOutputPath := *outputFlag
+	if !filepath.IsAbs(fullOutputPath) {
+		fullOutputPath = filepath.Join(absPath, fullOutputPath)
+	}
+
+	// Index goes to docs/arch-index.md
+	indexPath := filepath.Join(filepath.Dir(fullOutputPath), "arch-index.md")
+
+	// Create directory if needed
+	outputDir := filepath.Dir(fullOutputPath)
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating output directory: %v\n", err)
+		return 2
+	}
+
+	// Write index documentation
+	if err := os.WriteFile(indexPath, []byte(indexOutput), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing index documentation: %v\n", err)
+		return 2
+	}
+
+	fmt.Printf("✓ Generated architecture index: %s\n", indexPath)
+
+	// Generate full documentation (comprehensive)
+	fmt.Println("Generating full documentation...")
 	graphOutput, violationsOutput, shouldFail, err := linter.Run(absPath, "full", true, false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 2
 	}
 
-	// Write output to file
-	outputPath := *outputFlag
-	if !filepath.IsAbs(outputPath) {
-		outputPath = filepath.Join(absPath, outputPath)
-	}
-
-	// Create directory if needed
-	outputDir := filepath.Dir(outputPath)
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating output directory: %v\n", err)
+	// Write full documentation
+	if err := os.WriteFile(fullOutputPath, []byte(graphOutput), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing full documentation: %v\n", err)
 		return 2
 	}
 
-	if err := os.WriteFile(outputPath, []byte(graphOutput), 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing documentation: %v\n", err)
-		return 2
-	}
-
-	fmt.Printf("✓ Generated comprehensive documentation: %s\n", outputPath)
+	fmt.Printf("✓ Generated full documentation: %s\n", fullOutputPath)
 
 	// Report violations if any
 	if violationsOutput != "" {

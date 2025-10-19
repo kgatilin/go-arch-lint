@@ -179,6 +179,71 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool) 
 		return apiOutput, "", false, nil
 	}
 
+	// Handle index format separately
+	if format == "index" {
+		s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths, cfg.ShouldLintTestFiles())
+		filesWithAPI, err := s.ScanWithAPI(cfg.ScanPaths)
+		if err != nil {
+			return "", "", false, err
+		}
+
+		// Convert to output.FileWithAPI interface
+		outFiles := make([]output.FileWithAPI, len(filesWithAPI))
+		for i := range filesWithAPI {
+			outFiles[i] = &fileWithAPIAdapter{file: &filesWithAPI[i]}
+		}
+
+		// Build a minimal graph just for statistics
+		files, err := s.Scan(cfg.ScanPaths)
+		if err != nil {
+			return "", "", false, err
+		}
+		graphFiles := make([]graph.FileInfo, len(files))
+		for i, f := range files {
+			graphFiles[i] = f
+		}
+		g := graph.Build(graphFiles, cfg.Module)
+
+		// Check which required directories exist
+		existingDirs := make(map[string]bool)
+		for dirPath := range cfg.Structure.RequiredDirectories {
+			fullPath := filepath.Join(projectPath, dirPath)
+			if info, err := os.Stat(fullPath); err == nil && info.IsDir() {
+				existingDirs[dirPath] = true
+			} else {
+				existingDirs[dirPath] = false
+			}
+		}
+
+		// Count unique packages
+		packageSet := make(map[string]bool)
+		for _, node := range g.Nodes {
+			packageSet[node.Package] = true
+		}
+
+		// Create index documentation structure
+		indexDoc := output.FullDocumentation{
+			Structure: output.StructureInfo{
+				RequiredDirectories:   cfg.Structure.RequiredDirectories,
+				AllowOtherDirectories: cfg.Structure.AllowOtherDirectories,
+				ExistingDirs:          existingDirs,
+			},
+			Rules: output.RulesInfo{
+				DirectoriesImport: cfg.Rules.DirectoriesImport,
+				DetectUnused:      cfg.Rules.DetectUnused,
+			},
+			Graph:          &outputGraphAdapter{g: g},
+			Files:          outFiles,
+			Violations:     nil,
+			ViolationCount: 0, // Don't include violations in index
+			FileCount:      len(g.Nodes),
+			PackageCount:   len(packageSet),
+		}
+
+		indexOutput := output.GenerateIndexDocumentation(indexDoc)
+		return indexOutput, "", false, nil
+	}
+
 	// Scan files
 	s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths, cfg.ShouldLintTestFiles())
 
