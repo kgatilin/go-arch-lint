@@ -74,10 +74,20 @@ func GeneratePackageDocumentation(doc PackageDocumentation) string {
 	if doc.ExportCount == 0 {
 		sb.WriteString("No exported declarations.\n\n")
 	} else {
-		// Collect all exported declarations from all files in this package
+		// Collect all exported declarations from all files in this package (excluding test exports)
 		allDecls := []ExportedDecl{}
 		for _, file := range doc.Files {
-			allDecls = append(allDecls, file.GetExportedDecls()...)
+			// Skip test files
+			isTestFile := strings.HasSuffix(file.GetRelPath(), "_test.go")
+
+			for _, decl := range file.GetExportedDecls() {
+				isTestExport := strings.HasPrefix(decl.GetName(), "Test") || strings.HasPrefix(decl.GetName(), "Benchmark")
+
+				// Only include non-test exports
+				if !isTestFile && !isTestExport {
+					allDecls = append(allDecls, decl)
+				}
+			}
 		}
 
 		// Sort by name for consistent output

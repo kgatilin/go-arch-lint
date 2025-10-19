@@ -32,8 +32,8 @@
 ### pkg (Public APIs)
 
 - **linter** (`pkg/linter`)
-  - Files: 3 | Exports: 26
-  - Key exports: GetNodes, GetRelPath, GetPackage
+  - Files: 3 | Exports: 15
+  - Key exports: Run, Init, Refresh
   - **Details**: `go-arch-lint -format=package pkg/linter`
 
 
