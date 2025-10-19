@@ -179,10 +179,14 @@ func buildPackagesByLayer(files []FileWithAPI) LayerPackages {
 		}
 
 		pkg := packageMap[pkgPath]
-		pkg.FileCount++
 
-		// Skip test files when collecting exports
+		// Skip test files when counting files and collecting exports
 		isTestFile := strings.HasSuffix(relPath, "_test.go")
+
+		// Only count non-test files
+		if !isTestFile {
+			pkg.FileCount++
+		}
 
 		// Collect unique key exports (types and important functions)
 		for _, decl := range file.GetExportedDecls() {
