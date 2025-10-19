@@ -492,3 +492,551 @@ import "testing"
 		t.Errorf("expected main.go, got %s", filepath.Base(files[0].Path))
 	}
 }
+
+func TestScanDetailed_ExtractsUsedSymbols(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create file that uses specific symbols from imports
+	codeGo := `package pkg
+
+import (
+	"fmt"
+	"context"
+	"github.com/test/project/internal/types"
+)
+
+func Process(ctx context.Context) {
+	fmt.Println("hello")
+	fmt.Printf("world")
+	types.NewUser()
+	types.Validate()
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "code.go"), []byte(codeGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
+	files, err := s.ScanDetailed([]string{"pkg"})
+	if err != nil {
+		t.Fatalf("ScanDetailed failed: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+
+	file := files[0]
+
+	// Check basic FileInfo fields
+	if file.Package != "pkg" {
+		t.Errorf("expected package pkg, got %s", file.Package)
+	}
+
+	// Test GetImportUsages interface method
+	usages := file.GetImportUsages()
+	if len(usages) == 0 {
+		t.Fatal("expected import usages, got none")
+	}
+
+	// Verify import usages contain expected symbols
+	fmtUsage := findImportUsage(usages, "fmt")
+	if fmtUsage == nil {
+		t.Fatal("expected fmt import usage")
+	}
+
+	// Test ImportUsage interface methods
+	if fmtUsage.GetImportPath() != "fmt" {
+		t.Errorf("GetImportPath() = %s, want fmt", fmtUsage.GetImportPath())
+	}
+
+	symbols := fmtUsage.GetUsedSymbols()
+	if len(symbols) == 0 {
+		t.Error("expected used symbols from fmt")
+	}
+
+	// Verify symbols include Println and Printf
+	hasPrintln := false
+	hasPrintf := false
+	for _, sym := range symbols {
+		if sym == "Println" {
+			hasPrintln = true
+		}
+		if sym == "Printf" {
+			hasPrintf = true
+		}
+	}
+	if !hasPrintf {
+		t.Error("expected Printf in used symbols")
+	}
+	if !hasPrintln {
+		t.Error("expected Println in used symbols")
+	}
+
+	// Verify types usage
+	typesUsage := findImportUsage(usages, "github.com/test/project/internal/types")
+	if typesUsage == nil {
+		t.Fatal("expected types import usage")
+	}
+
+	typesSymbols := typesUsage.GetUsedSymbols()
+	hasNewUser := false
+	hasValidate := false
+	for _, sym := range typesSymbols {
+		if sym == "NewUser" {
+			hasNewUser = true
+		}
+		if sym == "Validate" {
+			hasValidate = true
+		}
+	}
+	if !hasNewUser {
+		t.Error("expected NewUser in used symbols")
+	}
+	if !hasValidate {
+		t.Error("expected Validate in used symbols")
+	}
+}
+
+func TestScanDetailed_NonExistentPath(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
+	files, err := s.ScanDetailed([]string{"nonexistent"})
+	if err != nil {
+		t.Fatalf("ScanDetailed failed: %v", err)
+	}
+
+	// Should return empty list, not error
+	if len(files) != 0 {
+		t.Errorf("expected 0 files, got %d", len(files))
+	}
+}
+
+func TestScanDetailed_LintTestFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create test file
+	testGo := `package pkg
+
+import "testing"
+
+var suite = &testing.T{}
+
+func TestSomething(t *testing.T) {
+	testing.Short()
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "code_test.go"), []byte(testGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// With lintTestFiles=true
+	s := scanner.New(tmpDir, "github.com/test/project", nil, true)
+	files, err := s.ScanDetailed([]string{"pkg"})
+	if err != nil {
+		t.Fatalf("ScanDetailed failed: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file when lintTestFiles=true, got %d", len(files))
+	}
+
+	// Verify usage tracking works for test files too
+	usages := files[0].GetImportUsages()
+	testingUsage := findImportUsage(usages, "testing")
+	if testingUsage == nil {
+		t.Fatal("expected testing import usage")
+	}
+
+	symbols := testingUsage.GetUsedSymbols()
+	hasT := false
+	hasShort := false
+	for _, sym := range symbols {
+		if sym == "T" {
+			hasT = true
+		}
+		if sym == "Short" {
+			hasShort = true
+		}
+	}
+	if !hasT {
+		t.Error("expected T in used symbols from testing package")
+	}
+	if !hasShort {
+		t.Error("expected Short in used symbols from testing package")
+	}
+}
+
+func TestFileInfo_InterfaceMethods(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	testGo := `package testpkg
+
+import "fmt"
+import "strings"
+
+func Hello() {
+	fmt.Println("hello")
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "test.go"), []byte(testGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
+	files, err := s.Scan([]string{"pkg"})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+
+	file := files[0]
+
+	// Test FileInfo interface methods
+	if file.GetPackage() != "testpkg" {
+		t.Errorf("GetPackage() = %s, want testpkg", file.GetPackage())
+	}
+
+	if file.GetRelPath() == "" {
+		t.Error("GetRelPath() should not be empty")
+	}
+
+	imports := file.GetImports()
+	if len(imports) != 2 {
+		t.Errorf("GetImports() returned %d imports, want 2", len(imports))
+	}
+
+	expectedImports := map[string]bool{
+		"fmt":     true,
+		"strings": true,
+	}
+	for _, imp := range imports {
+		if !expectedImports[imp] {
+			t.Errorf("unexpected import: %s", imp)
+		}
+	}
+}
+
+func TestExportedDecl_PropertiesMethod(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create struct with exported fields
+	structGo := `package pkg
+
+type Config struct {
+	Name string
+	Port int
+	Enabled bool
+}
+
+type Empty struct{}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "struct.go"), []byte(structGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
+	files, err := s.ScanWithAPI([]string{"pkg"})
+	if err != nil {
+		t.Fatalf("ScanWithAPI failed: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+
+	file := files[0]
+	decls := file.ExportedDecls
+
+	// Find Config struct
+	var configDecl *scanner.ExportedDecl
+	var emptyDecl *scanner.ExportedDecl
+	for i := range decls {
+		if decls[i].Name == "Config" {
+			configDecl = &decls[i]
+		}
+		if decls[i].Name == "Empty" {
+			emptyDecl = &decls[i]
+		}
+	}
+
+	if configDecl == nil {
+		t.Fatal("expected Config struct declaration")
+	}
+
+	// Test GetProperties interface method
+	props := configDecl.GetProperties()
+	if len(props) != 3 {
+		t.Errorf("GetProperties() returned %d properties, want 3", len(props))
+	}
+
+	expectedProps := map[string]bool{
+		"Name string":  true,
+		"Port int":     true,
+		"Enabled bool": true,
+	}
+	for _, prop := range props {
+		if !expectedProps[prop] {
+			t.Errorf("unexpected property: %s", prop)
+		}
+	}
+
+	// Test empty struct
+	if emptyDecl == nil {
+		t.Fatal("expected Empty struct declaration")
+	}
+
+	emptyProps := emptyDecl.GetProperties()
+	if len(emptyProps) != 0 {
+		t.Errorf("GetProperties() for empty struct returned %d properties, want 0", len(emptyProps))
+	}
+}
+
+func TestScanWithAPI_StructWithEmbeddedFields(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	embeddedGo := `package pkg
+
+type Base struct {
+	ID int
+}
+
+type Extended struct {
+	Base
+	Name string
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "embedded.go"), []byte(embeddedGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
+	files, err := s.ScanWithAPI([]string{"pkg"})
+	if err != nil {
+		t.Fatalf("ScanWithAPI failed: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+
+	file := files[0]
+
+	// Find Extended struct
+	var extendedDecl *scanner.ExportedDecl
+	for i := range file.ExportedDecls {
+		if file.ExportedDecls[i].Name == "Extended" {
+			extendedDecl = &file.ExportedDecls[i]
+			break
+		}
+	}
+
+	if extendedDecl == nil {
+		t.Fatal("expected Extended struct declaration")
+	}
+
+	props := extendedDecl.GetProperties()
+
+	// Should include both embedded Base and Name field
+	hasBase := false
+	hasName := false
+	for _, prop := range props {
+		if prop == "Base" {
+			hasBase = true
+		}
+		if prop == "Name string" {
+			hasName = true
+		}
+	}
+
+	if !hasBase {
+		t.Error("expected embedded Base field in properties")
+	}
+	if !hasName {
+		t.Error("expected Name field in properties")
+	}
+}
+
+func TestScanDetailed_WithImportAliases(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	aliasGo := `package pkg
+
+import (
+	f "fmt"
+	str "strings"
+)
+
+func Process() {
+	f.Println("hello")
+	str.ToUpper("test")
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "alias.go"), []byte(aliasGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
+	files, err := s.ScanDetailed([]string{"pkg"})
+	if err != nil {
+		t.Fatalf("ScanDetailed failed: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+
+	usages := files[0].GetImportUsages()
+
+	// Verify fmt usage tracked correctly despite alias
+	fmtUsage := findImportUsage(usages, "fmt")
+	if fmtUsage == nil {
+		t.Fatal("expected fmt import usage")
+	}
+
+	symbols := fmtUsage.GetUsedSymbols()
+	hasPrintln := false
+	for _, sym := range symbols {
+		if sym == "Println" {
+			hasPrintln = true
+		}
+	}
+	if !hasPrintln {
+		t.Error("expected Println in fmt used symbols")
+	}
+
+	// Verify strings usage tracked correctly despite alias
+	stringsUsage := findImportUsage(usages, "strings")
+	if stringsUsage == nil {
+		t.Fatal("expected strings import usage")
+	}
+
+	strSymbols := stringsUsage.GetUsedSymbols()
+	hasToUpper := false
+	for _, sym := range strSymbols {
+		if sym == "ToUpper" {
+			hasToUpper = true
+		}
+	}
+	if !hasToUpper {
+		t.Error("expected ToUpper in strings used symbols")
+	}
+}
+
+func TestScan_ErrorHandlingForInvalidPath(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create file with invalid Go syntax
+	invalidGo := `package pkg this is not valid go code`
+	if err := os.WriteFile(filepath.Join(pkgDir, "invalid.go"), []byte(invalidGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
+	_, err := s.Scan([]string{"pkg"})
+
+	// Should return error for invalid Go file
+	if err == nil {
+		t.Error("expected error for invalid Go file, got nil")
+	}
+}
+
+func TestScanWithAPI_ErrorHandlingForInvalidGo(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create file with invalid Go syntax
+	invalidGo := `package pkg
+func Invalid( {  // unclosed parenthesis
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "invalid.go"), []byte(invalidGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
+	_, err := s.ScanWithAPI([]string{"pkg"})
+
+	// Should return error for invalid Go file
+	if err == nil {
+		t.Error("expected error for invalid Go file, got nil")
+	}
+}
+
+func TestScanDetailed_ErrorHandlingForInvalidGo(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create file with invalid Go syntax
+	invalidGo := `package pkg
+import "fmt"
+func ( { // invalid
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "invalid.go"), []byte(invalidGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
+	_, err := s.ScanDetailed([]string{"pkg"})
+
+	// Should return error for invalid Go file
+	if err == nil {
+		t.Error("expected error for invalid Go file, got nil")
+	}
+}
+
+// Helper function to find import usage by import path
+func findImportUsage(usages []scanner.ImportUsage, importPath string) *scanner.ImportUsage {
+	for i := range usages {
+		if usages[i].ImportPath == importPath {
+			return &usages[i]
+		}
+	}
+	return nil
+}
