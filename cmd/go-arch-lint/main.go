@@ -33,6 +33,9 @@ DEFAULT COMMAND FLAGS:
     -detailed
         Show detailed method-level dependencies (use with -format=markdown)
 
+    -staticcheck
+        Run staticcheck and include results in output
+
     -exit-zero
         Always exit with code 0, even if violations are found
 
@@ -143,6 +146,7 @@ func run() int {
 	flag.Usage = printUsage
 	formatFlag := flag.String("format", "", "Output format: markdown (deps), api (public API), full (complete docs)")
 	detailedFlag := flag.Bool("detailed", false, "Show detailed method-level dependencies (with -format=markdown)")
+	staticcheckFlag := flag.Bool("staticcheck", false, "Run staticcheck and include results")
 	strictFlag := flag.Bool("strict", true, "Fail on any violations (default: true)")
 	exitZeroFlag := flag.Bool("exit-zero", false, "Always exit with code 0, even on violations")
 	flag.Parse()
@@ -161,7 +165,7 @@ func run() int {
 	}
 
 	// Run linter
-	graphOutput, violationsOutput, shouldFail, err := linter.Run(absPath, *formatFlag, *detailedFlag)
+	graphOutput, violationsOutput, shouldFail, err := linter.Run(absPath, *formatFlag, *detailedFlag, *staticcheckFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 2
@@ -321,7 +325,7 @@ func runDocs() int {
 
 	// Run linter with detailed full documentation
 	fmt.Println("Generating comprehensive documentation...")
-	graphOutput, violationsOutput, shouldFail, err := linter.Run(absPath, "full", true)
+	graphOutput, violationsOutput, shouldFail, err := linter.Run(absPath, "full", true, false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 2
