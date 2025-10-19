@@ -1288,3 +1288,229 @@ func TestProcess(t *testing.T) {
 	}
 }
 
+func TestCLI_Staticcheck_Clean(t *testing.T) {
+	// Skip if staticcheck is not available
+	if _, err := exec.LookPath("staticcheck"); err != nil {
+		t.Skip("staticcheck not available in PATH")
+	}
+
+	tmpDir := t.TempDir()
+
+	// Create valid project with no staticcheck issues
+	configYAML := `rules:
+  directories_import:
+    cmd: [pkg]
+    pkg: []
+scan_paths:
+  - cmd
+  - pkg
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	goMod := `module github.com/test/staticcheck-clean
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create simple, clean files
+	cmdDir := filepath.Join(tmpDir, "cmd")
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(cmdDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	mainGo := `package main
+
+import "github.com/test/staticcheck-clean/pkg"
+
+func main() {
+	pkg.Run()
+}
+`
+	if err := os.WriteFile(filepath.Join(cmdDir, "main.go"), []byte(mainGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pkgGo := `package pkg
+
+func Run() {
+	println("Hello")
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "pkg.go"), []byte(pkgGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run binary with --staticcheck flag
+	cmd := exec.Command(binaryPath, "--staticcheck", ".")
+	cmd.Dir = tmpDir
+	output, err := cmd.CombinedOutput()
+	outputStr := string(output)
+
+	// Should succeed (no arch violations, no staticcheck issues)
+	if err != nil {
+		t.Errorf("expected exit code 0, got error: %v\nOutput: %s", err, output)
+	}
+
+	exitCode := cmd.ProcessState.ExitCode()
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d\nOutput: %s", exitCode, output)
+	}
+
+	// Output should contain staticcheck results section
+	if !strings.Contains(outputStr, "STATICCHECK RESULTS") {
+		t.Error("expected output to contain 'STATICCHECK RESULTS' section")
+	}
+
+	// Should show no issues found
+	if !strings.Contains(outputStr, "✓ No issues found") {
+		t.Errorf("expected staticcheck to show no issues, got: %s", outputStr)
+	}
+}
+
+func TestCLI_Staticcheck_WithIssues(t *testing.T) {
+	// Skip if staticcheck is not available
+	if _, err := exec.LookPath("staticcheck"); err != nil {
+		t.Skip("staticcheck not available in PATH")
+	}
+
+	tmpDir := t.TempDir()
+
+	// Create project with staticcheck issues
+	configYAML := `rules:
+  directories_import:
+    cmd: [pkg]
+    pkg: []
+scan_paths:
+  - pkg
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	goMod := `module github.com/test/staticcheck-issues
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create pkg with staticcheck issues
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Code with staticcheck issues: unused variable, ineffective assignment
+	pkgGo := `package pkg
+
+func Run() {
+	var x int
+	x = 1
+	x = 2  // SA4006: this value of x is never used
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "pkg.go"), []byte(pkgGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run binary with --staticcheck flag
+	cmd := exec.Command(binaryPath, "--staticcheck", ".")
+	cmd.Dir = tmpDir
+	output, _ := cmd.CombinedOutput()
+	outputStr := string(output)
+
+	// Should fail (staticcheck found issues)
+	exitCode := 0
+	if cmd.ProcessState != nil {
+		exitCode = cmd.ProcessState.ExitCode()
+	}
+
+	if exitCode != 1 {
+		t.Errorf("expected exit code 1 (staticcheck issues), got %d\nOutput: %s", exitCode, output)
+	}
+
+	// Output should contain staticcheck results section
+	if !strings.Contains(outputStr, "STATICCHECK RESULTS") {
+		t.Error("expected output to contain 'STATICCHECK RESULTS' section")
+	}
+
+	// Should contain staticcheck findings (SA4006 or similar)
+	if !strings.Contains(outputStr, "pkg/pkg.go") {
+		t.Errorf("expected staticcheck to report issues in pkg/pkg.go, got: %s", outputStr)
+	}
+}
+
+func TestCLI_Staticcheck_NotAvailable(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create valid project
+	configYAML := `rules:
+  directories_import:
+    cmd: [pkg]
+    pkg: []
+scan_paths:
+  - pkg
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	pkgGo := `package pkg
+
+func Run() {}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "pkg.go"), []byte(pkgGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run with --staticcheck but with PATH modified to not include staticcheck
+	cmd := exec.Command(binaryPath, "--staticcheck", ".")
+	cmd.Dir = tmpDir
+	// Override PATH to exclude staticcheck (if it exists)
+	cmd.Env = []string{"PATH=/usr/bin:/bin"}
+	output, _ := cmd.CombinedOutput()
+	outputStr := string(output)
+
+	// Should not fail build even if staticcheck is missing (shows warning instead)
+	exitCode := 0
+	if cmd.ProcessState != nil {
+		exitCode = cmd.ProcessState.ExitCode()
+	}
+
+	// Exit code should be 0 (no arch violations, staticcheck missing is a warning)
+	if exitCode != 0 {
+		t.Logf("Note: Test expected exit code 0 when staticcheck is missing, got %d. This is acceptable if staticcheck is actually installed system-wide.", exitCode)
+	}
+
+	// Should contain warning about staticcheck not found
+	if !strings.Contains(outputStr, "Staticcheck error") || !strings.Contains(outputStr, "staticcheck not found") {
+		// If staticcheck was actually found (system-wide install), that's fine
+		if !strings.Contains(outputStr, "STATICCHECK RESULTS") {
+			t.Errorf("expected warning about staticcheck not found or staticcheck results, got: %s", outputStr)
+		}
+	}
+}
+

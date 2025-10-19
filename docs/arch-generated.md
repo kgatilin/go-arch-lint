@@ -15,17 +15,17 @@
 
 Required directories as defined in `.goarchlint`:
 
-### pkg
-**Purpose**: Public API and orchestration layer with adapters
+### cmd
+**Purpose**: Application entry points
 
-**Allowed dependencies**: internal
+**Allowed dependencies**: pkg
 
 **Status**: ✓ Exists
 
 ---
 
 ### internal
-**Purpose**: Domain primitives with complete isolation
+**Purpose**: Private application code
 
 **Allowed dependencies**: None (isolated layer)
 
@@ -33,10 +33,10 @@ Required directories as defined in `.goarchlint`:
 
 ---
 
-### cmd
-**Purpose**: Command-line entry points
+### pkg
+**Purpose**: Public libraries and APIs
 
-**Allowed dependencies**: pkg
+**Allowed dependencies**: internal
 
 **Status**: ✓ Exists
 
@@ -51,17 +51,17 @@ From `.goarchlint`:
 ```yaml
 structure:
   required_directories:
-    cmd: "Command-line entry points"
-    pkg: "Public API and orchestration layer with adapters"
-    internal: "Domain primitives with complete isolation"
+    cmd: "Application entry points"
+    internal: "Private application code"
+    pkg: "Public libraries and APIs"
   allow_other_directories: true
 
 rules:
   directories_import:
-    pkg: [internal]
-    internal: []
     cmd: [pkg]
-  detect_unused: false
+    internal: []
+    pkg: [internal]
+  detect_unused: true
 ```
 
 **Validation Status**: ✓ No violations found
@@ -115,6 +115,43 @@ Detailed method-level dependencies between files:
 
 ---
 
+### cmd/go-arch-lint/main_test.go
+**Package**: main_test
+
+**Local Dependencies**: None
+
+**External Dependencies**:
+- fmt
+  - Errorf
+  - Fprintf
+  - Sprintf
+- os
+  - Exit
+  - IsNotExist
+  - MkdirAll
+  - MkdirTemp
+  - ReadFile
+  - RemoveAll
+  - Stat
+  - Stderr
+  - WriteFile
+- os/exec
+  - Command
+  - ExitError
+  - LookPath
+- path/filepath
+  - Abs
+  - Join
+- strings
+  - Contains
+  - Count
+  - Index
+- testing
+  - M
+  - T
+
+---
+
 ### pkg/linter/linter.go
 **Package**: linter
 
@@ -122,6 +159,11 @@ Detailed method-level dependencies between files:
 - internal/config
   - Config
   - Load
+- internal/coverage
+  - CalculateOverallCoverage
+  - New
+  - PrintSummary
+  - SummarizeByDirectory
 - internal/graph
   - Build
   - BuildDetailed
@@ -150,21 +192,59 @@ Detailed method-level dependencies between files:
   - Dependency
   - FileNode
   - NewWithPath
+  - PackageCoverage
   - Violation
   - ViolationSharedExternalImport
 
 **External Dependencies**:
+- bytes
+  - Buffer
 - fmt
   - Errorf
   - Printf
   - Println
+  - Sprintf
 - os
   - IsNotExist
   - MkdirAll
   - Stat
   - WriteFile
+- os/exec
+  - Command
+  - LookPath
 - path/filepath
   - Join
+- strings
+  - Builder
+  - TrimSpace
+
+---
+
+### pkg/linter/linter_test.go
+**Package**: linter_test
+
+**Local Dependencies**:
+- pkg/linter
+  - AvailablePresets
+  - GetPreset
+  - Init
+  - Refresh
+  - Run
+
+**External Dependencies**:
+- os
+  - IsNotExist
+  - MkdirAll
+  - ReadFile
+  - Stat
+  - WriteFile
+- path/filepath
+  - Join
+- strings
+  - Contains
+  - Split
+- testing
+  - T
 
 ---
 
@@ -206,6 +286,82 @@ Detailed method-level dependencies between files:
 
 ---
 
+### internal/config/config_test.go
+**Package**: config_test
+
+**Local Dependencies**:
+- internal/config
+  - Load
+
+**External Dependencies**:
+- os
+  - WriteFile
+- path/filepath
+  - Join
+- testing
+  - T
+
+---
+
+### internal/coverage/coverage.go
+**Package**: coverage
+
+**Local Dependencies**: None
+
+**External Dependencies**:
+- fmt
+  - Errorf
+  - Printf
+  - Println
+- os
+  - FileInfo
+- os/exec
+  - Command
+- path/filepath
+  - Dir
+  - Join
+  - Rel
+  - SkipDir
+  - ToSlash
+  - Walk
+- strconv
+  - ParseFloat
+- strings
+  - Contains
+  - Fields
+  - HasPrefix
+  - HasSuffix
+  - Join
+  - Split
+  - TrimPrefix
+  - TrimSuffix
+
+---
+
+### internal/coverage/coverage_test.go
+**Package**: coverage_test
+
+**Local Dependencies**:
+- internal/coverage
+  - CalculateOverallCoverage
+  - DirectorySummary
+  - GetThresholdForPackage
+  - New
+  - PackageCoverage
+  - PrintSummary
+  - SummarizeByDirectory
+
+**External Dependencies**:
+- os
+  - MkdirAll
+  - WriteFile
+- path/filepath
+  - Join
+- testing
+  - T
+
+---
+
 ### internal/graph/graph.go
 **Package**: graph
 
@@ -220,6 +376,24 @@ Detailed method-level dependencies between files:
   - HasPrefix
   - Split
   - TrimPrefix
+
+---
+
+### internal/graph/graph_test.go
+**Package**: graph_test
+
+**Local Dependencies**:
+- internal/graph
+  - Build
+  - BuildDetailed
+  - Dependency
+  - FileInfo
+  - FileNode
+  - IsStdLib
+
+**External Dependencies**:
+- testing
+  - T
 
 ---
 
@@ -257,6 +431,34 @@ Detailed method-level dependencies between files:
   - Index
   - Split
   - TrimPrefix
+
+---
+
+### internal/output/markdown_test.go
+**Package**: output_test
+
+**Local Dependencies**:
+- internal/output
+  - Dependency
+  - ErrorContext
+  - ExportedDecl
+  - FileNode
+  - FileWithAPI
+  - FormatViolations
+  - FormatViolationsWithContext
+  - FullDocumentation
+  - GenerateAPIMarkdown
+  - GenerateFullDocumentation
+  - GenerateMarkdown
+  - RulesInfo
+  - StructureInfo
+  - Violation
+
+**External Dependencies**:
+- strings
+  - Contains
+- testing
+  - T
 
 ---
 
@@ -314,6 +516,27 @@ Detailed method-level dependencies between files:
 
 ---
 
+### internal/scanner/scanner_test.go
+**Package**: scanner_test
+
+**Local Dependencies**:
+- internal/scanner
+  - ExportedDecl
+  - ImportUsage
+  - New
+
+**External Dependencies**:
+- os
+  - MkdirAll
+  - WriteFile
+- path/filepath
+  - Base
+  - Join
+- testing
+  - T
+
+---
+
 ### internal/validator/validator.go
 **Package**: validator
 
@@ -345,9 +568,431 @@ Detailed method-level dependencies between files:
 
 ---
 
+### internal/validator/validator_test.go
+**Package**: validator_test
+
+**Local Dependencies**:
+- internal/validator
+  - Dependency
+  - FileNode
+  - New
+  - NewWithPath
+  - PackageCoverage
+  - Violation
+  - ViolationCrossCmd
+  - ViolationForbidden
+  - ViolationPkgToPkg
+  - ViolationSharedExternalImport
+  - ViolationSkipLevel
+  - ViolationTestFileLocation
+  - ViolationUnused
+  - ViolationWhiteboxTest
+
+**External Dependencies**:
+- strings
+  - Contains
+- testing
+  - T
+
+---
+
 ## Public API
 
 Exported interfaces and types available for consumption:
+
+### validator
+
+#### Types
+
+**Config** `Config`
+
+**PackageCoverage** `PackageCoverage`
+
+**Dependency** `Dependency`
+
+**FileNode** `FileNode`
+
+**Graph** `Graph`
+
+**ViolationType** `ViolationType`
+
+**ViolationPkgToPkg** `ViolationPkgToPkg`
+
+**ViolationSkipLevel** `ViolationSkipLevel`
+
+**ViolationCrossCmd** `ViolationCrossCmd`
+
+**ViolationUnused** `ViolationUnused`
+
+**ViolationForbidden** `ViolationForbidden`
+
+**ViolationMissingDirectory** `ViolationMissingDirectory`
+
+**ViolationUnexpectedDirectory** `ViolationUnexpectedDirectory`
+
+**ViolationEmptyDirectory** `ViolationEmptyDirectory`
+
+**ViolationUnusedDirectory** `ViolationUnusedDirectory`
+
+**ViolationSharedExternalImport** `ViolationSharedExternalImport`
+
+**ViolationTestFileLocation** `ViolationTestFileLocation`
+
+**ViolationWhiteboxTest** `ViolationWhiteboxTest`
+
+**ViolationLowCoverage** `ViolationLowCoverage`
+
+**Violation** `Violation`
+- Properties:
+  - Type ViolationType
+  - File string
+  - Line int
+  - Issue string
+  - Rule string
+  - Fix string
+
+**GetType** `(Violation) GetType() string`
+
+**GetFile** `(Violation) GetFile() string`
+
+**GetLine** `(Violation) GetLine() int`
+
+**GetIssue** `(Violation) GetIssue() string`
+
+**GetRule** `(Violation) GetRule() string`
+
+**GetFix** `(Violation) GetFix() string`
+
+**Validator** `Validator`
+
+**New** `New(Config, Graph) *Validator`
+
+**NewWithPath** `NewWithPath(Config, Graph, string) *Validator`
+
+**SetCoverageResults** `(*Validator) SetCoverageResults([]PackageCoverage)`
+
+**Validate** `(*Validator) Validate() []Violation`
+
+---
+
+### validator_test
+
+#### Types
+
+**GetDirectoriesImport** `(*testConfig) GetDirectoriesImport() map[string][]string`
+
+**ShouldDetectUnused** `(*testConfig) ShouldDetectUnused() bool`
+
+**GetRequiredDirectories** `(*testConfig) GetRequiredDirectories() map[string]string`
+
+**ShouldAllowOtherDirectories** `(*testConfig) ShouldAllowOtherDirectories() bool`
+
+**ShouldDetectSharedExternalImports** `(*testConfig) ShouldDetectSharedExternalImports() bool`
+
+**GetSharedExternalImportsMode** `(*testConfig) GetSharedExternalImportsMode() string`
+
+**GetSharedExternalImportsExclusions** `(*testConfig) GetSharedExternalImportsExclusions() []string`
+
+**GetSharedExternalImportsExclusionPatterns** `(*testConfig) GetSharedExternalImportsExclusionPatterns() []string`
+
+**ShouldLintTestFiles** `(*testConfig) ShouldLintTestFiles() bool`
+
+**GetTestExemptImports** `(*testConfig) GetTestExemptImports() []string`
+
+**GetTestFileLocation** `(*testConfig) GetTestFileLocation() string`
+
+**ShouldRequireBlackboxTests** `(*testConfig) ShouldRequireBlackboxTests() bool`
+
+**IsCoverageEnabled** `(*testConfig) IsCoverageEnabled() bool`
+
+**GetCoverageThreshold** `(*testConfig) GetCoverageThreshold() float64`
+
+**GetPackageThresholds** `(*testConfig) GetPackageThresholds() map[string]float64`
+
+**GetModule** `(*testConfig) GetModule() string`
+
+**GetImportPath** `(*testDependency) GetImportPath() string`
+
+**GetLocalPath** `(*testDependency) GetLocalPath() string`
+
+**IsLocalDep** `(*testDependency) IsLocalDep() bool`
+
+**GetRelPath** `(*testFileNode) GetRelPath() string`
+
+**GetPackage** `(*testFileNode) GetPackage() string`
+
+**GetDependencies** `(*testFileNode) GetDependencies() []validator.Dependency`
+
+**GetNodes** `(*testGraph) GetNodes() []validator.FileNode`
+
+**GetPackagePath** `(*testPackageCoverage) GetPackagePath() string`
+
+**GetCoverage** `(*testPackageCoverage) GetCoverage() float64`
+
+**HasTests** `(*testPackageCoverage) HasTests() bool`
+
+**TestValidate_PkgToPkgViolation** `TestValidate_PkgToPkgViolation(*testing.T)`
+
+**TestValidate_CrossCmdViolation** `TestValidate_CrossCmdViolation(*testing.T)`
+
+**TestValidate_SkipLevelImport** `TestValidate_SkipLevelImport(*testing.T)`
+
+**TestValidate_DirectSubpackageAllowed** `TestValidate_DirectSubpackageAllowed(*testing.T)`
+
+**TestValidate_UnusedPackage** `TestValidate_UnusedPackage(*testing.T)`
+
+**TestValidate_InternalToInternalViolation** `TestValidate_InternalToInternalViolation(*testing.T)`
+
+**TestValidate_NoViolations** `TestValidate_NoViolations(*testing.T)`
+
+**TestValidate_SubdirectorySpecificRule** `TestValidate_SubdirectorySpecificRule(*testing.T)`
+
+**TestValidate_PrefixMatchingForAllowedImports** `TestValidate_PrefixMatchingForAllowedImports(*testing.T)`
+
+**TestValidate_ForbiddenImportNotInAllowedList** `TestValidate_ForbiddenImportNotInAllowedList(*testing.T)`
+
+**TestDetectSharedExternalImports_MultipleLayersImportSamePackage** `TestDetectSharedExternalImports_MultipleLayersImportSamePackage(*testing.T)`
+
+**TestDetectSharedExternalImports_ExactExclusion** `TestDetectSharedExternalImports_ExactExclusion(*testing.T)`
+
+**TestDetectSharedExternalImports_GlobExclusion** `TestDetectSharedExternalImports_GlobExclusion(*testing.T)`
+
+**TestDetectSharedExternalImports_SingleLayerNoViolation** `TestDetectSharedExternalImports_SingleLayerNoViolation(*testing.T)`
+
+**TestBlackBoxTest_ParentPackageImport** `TestBlackBoxTest_ParentPackageImport(*testing.T)`
+
+**TestWhiteBoxTest_NormalRules** `TestWhiteBoxTest_NormalRules(*testing.T)`
+
+**TestBlackBoxTest_OtherImportsFollowNormalRules** `TestBlackBoxTest_OtherImportsFollowNormalRules(*testing.T)`
+
+**TestBlackBoxTest_InPkgLayer** `TestBlackBoxTest_InPkgLayer(*testing.T)`
+
+**TestValidateTestFileLocations_Colocated** `TestValidateTestFileLocations_Colocated(*testing.T)`
+
+**TestValidateTestFileLocations_Separate** `TestValidateTestFileLocations_Separate(*testing.T)`
+
+**TestValidateTestFileLocations_Any** `TestValidateTestFileLocations_Any(*testing.T)`
+
+**TestValidateBlackboxTests_WhiteboxDetected** `TestValidateBlackboxTests_WhiteboxDetected(*testing.T)`
+
+**TestValidateBlackboxTests_BlackboxAllowed** `TestValidateBlackboxTests_BlackboxAllowed(*testing.T)`
+
+**TestValidateBlackboxTests_DisabledByDefault** `TestValidateBlackboxTests_DisabledByDefault(*testing.T)`
+
+**TestViolation_InterfaceMethods** `TestViolation_InterfaceMethods(*testing.T)`
+
+**TestNewWithPath** `TestNewWithPath(*testing.T)`
+
+**TestSetCoverageResults** `TestSetCoverageResults(*testing.T)`
+
+---
+
+### main_test
+
+#### Types
+
+**TestMain** `TestMain(*testing.M)`
+
+**TestCLI_NoViolations_ExitCode0** `TestCLI_NoViolations_ExitCode0(*testing.T)`
+
+**TestCLI_WithViolations_ExitCode1** `TestCLI_WithViolations_ExitCode1(*testing.T)`
+
+**TestCLI_ExitZeroFlag** `TestCLI_ExitZeroFlag(*testing.T)`
+
+**TestCLI_SharedExternalImports_WarnMode** `TestCLI_SharedExternalImports_WarnMode(*testing.T)`
+
+**TestCLI_SharedExternalImports_ErrorMode** `TestCLI_SharedExternalImports_ErrorMode(*testing.T)`
+
+**TestCLI_MarkdownFormat** `TestCLI_MarkdownFormat(*testing.T)`
+
+**TestCLI_InitPreset_DDD** `TestCLI_InitPreset_DDD(*testing.T)`
+
+**TestCLI_InitPreset_Simple** `TestCLI_InitPreset_Simple(*testing.T)`
+
+**TestCLI_InitPreset_Hexagonal** `TestCLI_InitPreset_Hexagonal(*testing.T)`
+
+**TestCLI_Refresh_SamePreset** `TestCLI_Refresh_SamePreset(*testing.T)`
+
+**TestCLI_Refresh_SwitchPreset** `TestCLI_Refresh_SwitchPreset(*testing.T)`
+
+**TestCLI_Refresh_NoConfig** `TestCLI_Refresh_NoConfig(*testing.T)`
+
+**TestCLI_Refresh_CustomConfig** `TestCLI_Refresh_CustomConfig(*testing.T)`
+
+**TestCLI_Init_GeneratesFullDocs** `TestCLI_Init_GeneratesFullDocs(*testing.T)`
+
+**TestCLI_Help** `TestCLI_Help(*testing.T)`
+
+**TestCLI_RequireBlackboxTests** `TestCLI_RequireBlackboxTests(*testing.T)`
+
+**TestCLI_WhiteboxTestGuidance_NotRepeated** `TestCLI_WhiteboxTestGuidance_NotRepeated(*testing.T)`
+
+**TestCLI_Staticcheck_Clean** `TestCLI_Staticcheck_Clean(*testing.T)`
+
+**TestCLI_Staticcheck_WithIssues** `TestCLI_Staticcheck_WithIssues(*testing.T)`
+
+**TestCLI_Staticcheck_NotAvailable** `TestCLI_Staticcheck_NotAvailable(*testing.T)`
+
+---
+
+### linter
+
+#### Types
+
+**GetNodes** `(*graphAdapter) GetNodes() []validator.FileNode`
+
+**GetRelPath** `(*fileNodeAdapter) GetRelPath() string`
+
+**GetPackage** `(*fileNodeAdapter) GetPackage() string`
+
+**GetDependencies** `(*fileNodeAdapter) GetDependencies() []validator.Dependency`
+
+**GetNodes** `(*outputGraphAdapter) GetNodes() []output.FileNode`
+
+**GetRelPath** `(*outputFileNodeAdapter) GetRelPath() string`
+
+**GetPackage** `(*outputFileNodeAdapter) GetPackage() string`
+
+**GetDependencies** `(*outputFileNodeAdapter) GetDependencies() []output.Dependency`
+
+**GetRelPath** `(*fileWithAPIAdapter) GetRelPath() string`
+
+**GetPackage** `(*fileWithAPIAdapter) GetPackage() string`
+
+**GetExportedDecls** `(*fileWithAPIAdapter) GetExportedDecls() []output.ExportedDecl`
+
+**Run** `Run(string, string, bool, bool) (string, string, bool, error)`
+
+**Init** `Init(string, bool) error`
+
+**Refresh** `Refresh(string) error`
+
+#### Types
+
+**Preset** `Preset`
+- Properties:
+  - Name string
+  - Description string
+  - Config PresetConfig
+  - ArchitecturalGoals string
+  - Principles []string
+  - ViolationContext map[string]string
+  - RefactoringGuidance string
+  - CoverageGuidance string
+  - BlackboxTestingGuidance string
+
+**PresetConfig** `PresetConfig`
+- Properties:
+  - Structure PresetStructure
+  - Rules PresetRules
+
+**PresetStructure** `PresetStructure`
+- Properties:
+  - RequiredDirectories map[string]string
+  - AllowOtherDirectories bool
+
+**PresetTestCoverage** `PresetTestCoverage`
+- Properties:
+  - Enabled bool
+  - Threshold float64
+  - PackageThresholds map[string]float64
+
+**PresetRules** `PresetRules`
+- Properties:
+  - DirectoriesImport map[string][]string
+  - DetectUnused bool
+  - SharedExternalImports PresetSharedExternalImports
+  - TestFiles PresetTestFiles
+  - TestCoverage PresetTestCoverage
+
+**PresetTestFiles** `PresetTestFiles`
+- Properties:
+  - Lint bool
+  - ExemptImports []string
+  - Location string
+  - RequireBlackbox bool
+
+**PresetSharedExternalImports** `PresetSharedExternalImports`
+- Properties:
+  - Detect bool
+  - Mode string
+  - Exclusions []string
+  - ExclusionPatterns []string
+
+**AvailablePresets** `AvailablePresets() []Preset`
+
+**GetPreset** `GetPreset(string) (*Preset, error)`
+
+**CreateConfigFromPreset** `CreateConfigFromPreset(string, bool) error`
+
+**ErrorPromptConfig** `ErrorPromptConfig`
+- Properties:
+  - Enabled bool
+  - ArchitecturalGoals string
+  - Principles []string
+  - RefactoringGuidance string
+  - CoverageGuidance string
+  - BlackboxTestingGuidance string
+
+**RefreshConfigFromPreset** `RefreshConfigFromPreset(string) error`
+
+---
+
+### linter_test
+
+#### Types
+
+**TestRun_MarkdownFormat** `TestRun_MarkdownFormat(*testing.T)`
+
+**TestRun_APIFormat** `TestRun_APIFormat(*testing.T)`
+
+**TestRun_WithViolations** `TestRun_WithViolations(*testing.T)`
+
+**TestRun_InvalidConfig** `TestRun_InvalidConfig(*testing.T)`
+
+**TestRun_SharedExternalImports_Detection** `TestRun_SharedExternalImports_Detection(*testing.T)`
+
+**TestRun_SharedExternalImports_ExactExclusion** `TestRun_SharedExternalImports_ExactExclusion(*testing.T)`
+
+**TestRun_SharedExternalImports_GlobPattern** `TestRun_SharedExternalImports_GlobPattern(*testing.T)`
+
+**TestRun_SharedExternalImports_ErrorMode** `TestRun_SharedExternalImports_ErrorMode(*testing.T)`
+
+**TestRun_SharedExternalImports_SingleLayer** `TestRun_SharedExternalImports_SingleLayer(*testing.T)`
+
+**TestRun_TestFileLinting_Enabled** `TestRun_TestFileLinting_Enabled(*testing.T)`
+
+**TestRun_TestFileLinting_Disabled** `TestRun_TestFileLinting_Disabled(*testing.T)`
+
+**TestRun_BlackBoxTests** `TestRun_BlackBoxTests(*testing.T)`
+
+**TestRun_BlackBoxTests_MultipleImports** `TestRun_BlackBoxTests_MultipleImports(*testing.T)`
+
+**TestRun_RequireBlackboxTests** `TestRun_RequireBlackboxTests(*testing.T)`
+
+**TestAvailablePresets** `TestAvailablePresets(*testing.T)`
+
+**TestGetPreset_ValidPreset** `TestGetPreset_ValidPreset(*testing.T)`
+
+**TestGetPreset_InvalidPreset** `TestGetPreset_InvalidPreset(*testing.T)`
+
+**TestInit_WithDDDPreset** `TestInit_WithDDDPreset(*testing.T)`
+
+**TestInit_WithSimplePreset** `TestInit_WithSimplePreset(*testing.T)`
+
+**TestInit_InvalidPreset** `TestInit_InvalidPreset(*testing.T)`
+
+**TestInit_ConfigAlreadyExists** `TestInit_ConfigAlreadyExists(*testing.T)`
+
+**TestRefresh_WithSamePreset** `TestRefresh_WithSamePreset(*testing.T)`
+
+**TestRefresh_SwitchToNewPreset** `TestRefresh_SwitchToNewPreset(*testing.T)`
+
+**TestRefresh_NoConfigExists** `TestRefresh_NoConfigExists(*testing.T)`
+
+**TestPresets_RequireBlackboxDefault** `TestPresets_RequireBlackboxDefault(*testing.T)`
+
+---
 
 ### graph
 
@@ -394,63 +1039,295 @@ Exported interfaces and types available for consumption:
 
 ---
 
-### output
+### scanner_test
 
 #### Types
 
-**StructureInfo** `StructureInfo`
-- Properties:
-  - RequiredDirectories map[string]string
-  - AllowOtherDirectories bool
-  - ExistingDirs map[string]bool
+**TestScan_BasicFiles** `TestScan_BasicFiles(*testing.T)`
 
-**RulesInfo** `RulesInfo`
-- Properties:
-  - DirectoriesImport map[string][]string
-  - DetectUnused bool
+**TestScan_IgnoresPaths** `TestScan_IgnoresPaths(*testing.T)`
 
-**FullDocumentation** `FullDocumentation`
-- Properties:
-  - Structure StructureInfo
-  - Rules RulesInfo
-  - Graph Graph
-  - Files []FileWithAPI
-  - Violations []Violation
-  - ViolationCount int
-  - FileCount int
-  - PackageCount int
+**TestScan_SkipsTestFiles** `TestScan_SkipsTestFiles(*testing.T)`
 
-**GenerateFullDocumentation** `GenerateFullDocumentation(FullDocumentation) string`
+**TestScan_NonExistentPath** `TestScan_NonExistentPath(*testing.T)`
+
+**TestScanWithAPI_ExtractsExportedDeclarations** `TestScanWithAPI_ExtractsExportedDeclarations(*testing.T)`
+
+**TestScanWithAPI_InterfaceMethods** `TestScanWithAPI_InterfaceMethods(*testing.T)`
+
+**TestScanWithAPI_ComplexSignatures** `TestScanWithAPI_ComplexSignatures(*testing.T)`
+
+**TestScan_LintTestFiles_Enabled** `TestScan_LintTestFiles_Enabled(*testing.T)`
+
+**TestScan_LintTestFiles_Disabled** `TestScan_LintTestFiles_Disabled(*testing.T)`
+
+**TestScanDetailed_ExtractsUsedSymbols** `TestScanDetailed_ExtractsUsedSymbols(*testing.T)`
+
+**TestScanDetailed_NonExistentPath** `TestScanDetailed_NonExistentPath(*testing.T)`
+
+**TestScanDetailed_LintTestFiles** `TestScanDetailed_LintTestFiles(*testing.T)`
+
+**TestFileInfo_InterfaceMethods** `TestFileInfo_InterfaceMethods(*testing.T)`
+
+**TestExportedDecl_PropertiesMethod** `TestExportedDecl_PropertiesMethod(*testing.T)`
+
+**TestScanWithAPI_StructWithEmbeddedFields** `TestScanWithAPI_StructWithEmbeddedFields(*testing.T)`
+
+**TestScanDetailed_WithImportAliases** `TestScanDetailed_WithImportAliases(*testing.T)`
+
+**TestScan_ErrorHandlingForInvalidPath** `TestScan_ErrorHandlingForInvalidPath(*testing.T)`
+
+**TestScanWithAPI_ErrorHandlingForInvalidGo** `TestScanWithAPI_ErrorHandlingForInvalidGo(*testing.T)`
+
+**TestScanDetailed_ErrorHandlingForInvalidGo** `TestScanDetailed_ErrorHandlingForInvalidGo(*testing.T)`
+
+---
+
+### config
 
 #### Types
 
-**Dependency** `Dependency`
+**Config** `Config`
+- Properties:
+  - Module string
+  - ScanPaths []string
+  - IgnorePaths []string
+  - Structure Structure
+  - Rules Rules
+  - PresetUsed string
+  - ErrorPrompt ErrorPrompt
 
-**FileNode** `FileNode`
-
-**Graph** `Graph`
-
-**ExportedDecl** `ExportedDecl`
-
-**FileWithAPI** `FileWithAPI`
-
-**Violation** `Violation`
-
-**GenerateMarkdown** `GenerateMarkdown(Graph) string`
-
-**ErrorContext** `ErrorContext`
+**ErrorPrompt** `ErrorPrompt`
 - Properties:
   - Enabled bool
-  - PresetName string
   - ArchitecturalGoals string
   - Principles []string
   - RefactoringGuidance string
+  - CoverageGuidance string
+  - BlackboxTestingGuidance string
 
-**FormatViolationsWithContext** `FormatViolationsWithContext([]Violation, *ErrorContext) string`
+**Structure** `Structure`
+- Properties:
+  - RequiredDirectories map[string]string
+  - AllowOtherDirectories bool
 
-**FormatViolations** `FormatViolations([]Violation) string`
+**SharedExternalImports** `SharedExternalImports`
+- Properties:
+  - Mode string
+  - Exclusions []string
+  - ExclusionPatterns []string
+  - Detect bool
 
-**GenerateAPIMarkdown** `GenerateAPIMarkdown([]FileWithAPI) string`
+**TestCoverage** `TestCoverage`
+- Properties:
+  - Enabled bool
+  - Threshold float64
+  - PackageThresholds map[string]float64
+
+**Rules** `Rules`
+- Properties:
+  - DirectoriesImport map[string][]string
+  - DetectUnused bool
+  - SharedExternalImports SharedExternalImports
+  - TestFiles TestFiles
+  - TestCoverage TestCoverage
+
+**TestFiles** `TestFiles`
+- Properties:
+  - Lint bool
+  - ExemptImports []string
+  - Location string
+  - RequireBlackbox bool
+
+**GetDirectoriesImport** `(*Config) GetDirectoriesImport() map[string][]string`
+
+**ShouldDetectUnused** `(*Config) ShouldDetectUnused() bool`
+
+**GetRequiredDirectories** `(*Config) GetRequiredDirectories() map[string]string`
+
+**ShouldAllowOtherDirectories** `(*Config) ShouldAllowOtherDirectories() bool`
+
+**GetPresetUsed** `(*Config) GetPresetUsed() string`
+
+**GetErrorPrompt** `(*Config) GetErrorPrompt() ErrorPrompt`
+
+**ShouldDetectSharedExternalImports** `(*Config) ShouldDetectSharedExternalImports() bool`
+
+**GetSharedExternalImportsMode** `(*Config) GetSharedExternalImportsMode() string`
+
+**GetSharedExternalImportsExclusions** `(*Config) GetSharedExternalImportsExclusions() []string`
+
+**GetSharedExternalImportsExclusionPatterns** `(*Config) GetSharedExternalImportsExclusionPatterns() []string`
+
+**ShouldLintTestFiles** `(*Config) ShouldLintTestFiles() bool`
+
+**GetTestExemptImports** `(*Config) GetTestExemptImports() []string`
+
+**GetTestFileLocation** `(*Config) GetTestFileLocation() string`
+
+**ShouldRequireBlackboxTests** `(*Config) ShouldRequireBlackboxTests() bool`
+
+**IsCoverageEnabled** `(*Config) IsCoverageEnabled() bool`
+
+**GetCoverageThreshold** `(*Config) GetCoverageThreshold() float64`
+
+**GetPackageThresholds** `(*Config) GetPackageThresholds() map[string]float64`
+
+**GetModule** `(*Config) GetModule() string`
+
+**Load** `Load(string) (*Config, error)`
+
+---
+
+### coverage
+
+#### Types
+
+**Config** `Config`
+
+**PackageCoverage** `PackageCoverage`
+- Properties:
+  - PackagePath string
+  - Coverage float64
+
+**GetPackagePath** `(PackageCoverage) GetPackagePath() string`
+
+**GetCoverage** `(PackageCoverage) GetCoverage() float64`
+
+**HasTests** `(PackageCoverage) HasTests() bool`
+
+**Runner** `Runner`
+
+**New** `New(string) *Runner`
+
+**Run** `(*Runner) Run([]string) ([]PackageCoverage, error)`
+
+**DirectorySummary** `DirectorySummary`
+- Properties:
+  - Directory string
+  - PackageCount int
+  - TestedPackages int
+  - TotalLines int
+  - CoveredLines int
+  - AvgCoverage float64
+
+**SummarizeByDirectory** `SummarizeByDirectory([]PackageCoverage, string, []string) []DirectorySummary`
+
+**PrintSummary** `PrintSummary([]DirectorySummary, float64)`
+
+**CalculateOverallCoverage** `CalculateOverallCoverage([]PackageCoverage) float64`
+
+**GetThresholdForPackage** `GetThresholdForPackage(string, float64, map[string]float64) float64`
+
+---
+
+### output_test
+
+#### Types
+
+**GetImportPath** `(*testDependency) GetImportPath() string`
+
+**IsLocalDep** `(*testDependency) IsLocalDep() bool`
+
+**GetLocalPath** `(*testDependency) GetLocalPath() string`
+
+**GetUsedSymbols** `(*testDependency) GetUsedSymbols() []string`
+
+**GetRelPath** `(*testFileNode) GetRelPath() string`
+
+**GetPackage** `(*testFileNode) GetPackage() string`
+
+**GetDependencies** `(*testFileNode) GetDependencies() []output.Dependency`
+
+**GetNodes** `(*testGraph) GetNodes() []output.FileNode`
+
+**GetType** `(*testViolation) GetType() string`
+
+**GetFile** `(*testViolation) GetFile() string`
+
+**GetLine** `(*testViolation) GetLine() int`
+
+**GetIssue** `(*testViolation) GetIssue() string`
+
+**GetRule** `(*testViolation) GetRule() string`
+
+**GetFix** `(*testViolation) GetFix() string`
+
+**TestGenerateMarkdown_Basic** `TestGenerateMarkdown_Basic(*testing.T)`
+
+**TestGenerateMarkdown_NoDependencies** `TestGenerateMarkdown_NoDependencies(*testing.T)`
+
+**TestFormatViolations_NoViolations** `TestFormatViolations_NoViolations(*testing.T)`
+
+**TestFormatViolations_WithViolations** `TestFormatViolations_WithViolations(*testing.T)`
+
+**TestFormatViolations_UnusedPackage** `TestFormatViolations_UnusedPackage(*testing.T)`
+
+**GetRelPath** `(*testFileWithAPI) GetRelPath() string`
+
+**GetPackage** `(*testFileWithAPI) GetPackage() string`
+
+**GetExportedDecls** `(*testFileWithAPI) GetExportedDecls() []output.ExportedDecl`
+
+**GetName** `(*testExportedDecl) GetName() string`
+
+**GetKind** `(*testExportedDecl) GetKind() string`
+
+**GetSignature** `(*testExportedDecl) GetSignature() string`
+
+**GetProperties** `(*testExportedDecl) GetProperties() []string`
+
+**TestGenerateAPIMarkdown_Basic** `TestGenerateAPIMarkdown_Basic(*testing.T)`
+
+**TestGenerateAPIMarkdown_MultiplePackages** `TestGenerateAPIMarkdown_MultiplePackages(*testing.T)`
+
+**TestGenerateAPIMarkdown_NoExportedDeclarations** `TestGenerateAPIMarkdown_NoExportedDeclarations(*testing.T)`
+
+**TestGenerateAPIMarkdown_SamePackageMultipleFiles** `TestGenerateAPIMarkdown_SamePackageMultipleFiles(*testing.T)`
+
+**TestGenerateAPIMarkdown_OnlyFunctions** `TestGenerateAPIMarkdown_OnlyFunctions(*testing.T)`
+
+**TestGenerateFullDocumentation_Complete** `TestGenerateFullDocumentation_Complete(*testing.T)`
+
+**TestGenerateFullDocumentation_WithViolations** `TestGenerateFullDocumentation_WithViolations(*testing.T)`
+
+**TestGenerateFullDocumentation_NoRequiredDirs** `TestGenerateFullDocumentation_NoRequiredDirs(*testing.T)`
+
+**TestGenerateFullDocumentation_NoPublicAPI** `TestGenerateFullDocumentation_NoPublicAPI(*testing.T)`
+
+**TestFormatViolationsWithContext_Enabled** `TestFormatViolationsWithContext_Enabled(*testing.T)`
+
+**TestFormatViolationsWithContext_Disabled** `TestFormatViolationsWithContext_Disabled(*testing.T)`
+
+**TestFormatViolationsWithContext_TestViolations** `TestFormatViolationsWithContext_TestViolations(*testing.T)`
+
+**TestFormatViolationsWithContext_WhiteboxTestViolations** `TestFormatViolationsWithContext_WhiteboxTestViolations(*testing.T)`
+
+**TestFormatViolationsWithContext_MixedViolations** `TestFormatViolationsWithContext_MixedViolations(*testing.T)`
+
+---
+
+### main
+
+---
+
+### config_test
+
+#### Types
+
+**TestLoad_WithConfigFile** `TestLoad_WithConfigFile(*testing.T)`
+
+**TestLoad_WithoutConfigFile** `TestLoad_WithoutConfigFile(*testing.T)`
+
+**TestLoad_NoGoMod** `TestLoad_NoGoMod(*testing.T)`
+
+**TestConfig_SharedExternalImports** `TestConfig_SharedExternalImports(*testing.T)`
+
+**TestConfig_InterfaceMethods** `TestConfig_InterfaceMethods(*testing.T)`
+
+**TestConfig_DefaultValues** `TestConfig_DefaultValues(*testing.T)`
+
+**TestConfig_GetSharedExternalImportsMode_DefaultValue** `TestConfig_GetSharedExternalImportsMode_DefaultValue(*testing.T)`
 
 ---
 
@@ -521,11 +1398,87 @@ Exported interfaces and types available for consumption:
 
 ---
 
-### validator
+### coverage_test
 
 #### Types
 
-**Config** `Config`
+**TestGetThresholdForPackage_Hierarchical** `TestGetThresholdForPackage_Hierarchical(*testing.T)`
+
+**TestPackageCoverage_InterfaceMethods** `TestPackageCoverage_InterfaceMethods(*testing.T)`
+
+**TestRunner_Run_WithTestFiles** `TestRunner_Run_WithTestFiles(*testing.T)`
+
+**TestRunner_Run_NoTestFiles** `TestRunner_Run_NoTestFiles(*testing.T)`
+
+**TestSummarizeByDirectory** `TestSummarizeByDirectory(*testing.T)`
+
+**TestCalculateOverallCoverage** `TestCalculateOverallCoverage(*testing.T)`
+
+**TestRunner_Run_MultipleDirectories** `TestRunner_Run_MultipleDirectories(*testing.T)`
+
+**TestPrintSummary_EmptySummaries** `TestPrintSummary_EmptySummaries(*testing.T)`
+
+---
+
+### graph_test
+
+#### Types
+
+**GetRelPath** `(testFileInfo) GetRelPath() string`
+
+**GetPackage** `(testFileInfo) GetPackage() string`
+
+**GetImports** `(testFileInfo) GetImports() []string`
+
+**TestBuild_LocalAndExternalImports** `TestBuild_LocalAndExternalImports(*testing.T)`
+
+**TestIsStdLib** `TestIsStdLib(*testing.T)`
+
+**TestGetLocalPackages** `TestGetLocalPackages(*testing.T)`
+
+**TestDependency_InterfaceMethods** `TestDependency_InterfaceMethods(*testing.T)`
+
+**TestFileNode_InterfaceMethods** `TestFileNode_InterfaceMethods(*testing.T)`
+
+**TestBuild_MultipleFiles** `TestBuild_MultipleFiles(*testing.T)`
+
+**TestBuildDetailed** `TestBuildDetailed(*testing.T)`
+
+**TestBuildDetailed_WithNilUsageMap** `TestBuildDetailed_WithNilUsageMap(*testing.T)`
+
+**TestIsStdLib_EdgeCases** `TestIsStdLib_EdgeCases(*testing.T)`
+
+---
+
+### output
+
+#### Types
+
+**StructureInfo** `StructureInfo`
+- Properties:
+  - RequiredDirectories map[string]string
+  - AllowOtherDirectories bool
+  - ExistingDirs map[string]bool
+
+**RulesInfo** `RulesInfo`
+- Properties:
+  - DirectoriesImport map[string][]string
+  - DetectUnused bool
+
+**FullDocumentation** `FullDocumentation`
+- Properties:
+  - Structure StructureInfo
+  - Rules RulesInfo
+  - Graph Graph
+  - Files []FileWithAPI
+  - Violations []Violation
+  - ViolationCount int
+  - FileCount int
+  - PackageCount int
+
+**GenerateFullDocumentation** `GenerateFullDocumentation(FullDocumentation) string`
+
+#### Types
 
 **Dependency** `Dependency`
 
@@ -533,239 +1486,39 @@ Exported interfaces and types available for consumption:
 
 **Graph** `Graph`
 
-**ViolationType** `ViolationType`
+**ExportedDecl** `ExportedDecl`
 
-**ViolationPkgToPkg** `ViolationPkgToPkg`
-
-**ViolationSkipLevel** `ViolationSkipLevel`
-
-**ViolationCrossCmd** `ViolationCrossCmd`
-
-**ViolationUnused** `ViolationUnused`
-
-**ViolationForbidden** `ViolationForbidden`
-
-**ViolationMissingDirectory** `ViolationMissingDirectory`
-
-**ViolationUnexpectedDirectory** `ViolationUnexpectedDirectory`
-
-**ViolationEmptyDirectory** `ViolationEmptyDirectory`
-
-**ViolationUnusedDirectory** `ViolationUnusedDirectory`
-
-**ViolationSharedExternalImport** `ViolationSharedExternalImport`
-
-**ViolationTestFileLocation** `ViolationTestFileLocation`
+**FileWithAPI** `FileWithAPI`
 
 **Violation** `Violation`
-- Properties:
-  - Type ViolationType
-  - File string
-  - Line int
-  - Issue string
-  - Rule string
-  - Fix string
 
-**GetType** `(Violation) GetType() string`
+**GenerateMarkdown** `GenerateMarkdown(Graph) string`
 
-**GetFile** `(Violation) GetFile() string`
-
-**GetLine** `(Violation) GetLine() int`
-
-**GetIssue** `(Violation) GetIssue() string`
-
-**GetRule** `(Violation) GetRule() string`
-
-**GetFix** `(Violation) GetFix() string`
-
-**Validator** `Validator`
-
-**New** `New(Config, Graph) *Validator`
-
-**NewWithPath** `NewWithPath(Config, Graph, string) *Validator`
-
-**Validate** `(*Validator) Validate() []Violation`
-
----
-
-### main
-
----
-
-### linter
-
-#### Types
-
-**GetNodes** `(*graphAdapter) GetNodes() []validator.FileNode`
-
-**GetRelPath** `(*fileNodeAdapter) GetRelPath() string`
-
-**GetPackage** `(*fileNodeAdapter) GetPackage() string`
-
-**GetDependencies** `(*fileNodeAdapter) GetDependencies() []validator.Dependency`
-
-**GetNodes** `(*outputGraphAdapter) GetNodes() []output.FileNode`
-
-**GetRelPath** `(*outputFileNodeAdapter) GetRelPath() string`
-
-**GetPackage** `(*outputFileNodeAdapter) GetPackage() string`
-
-**GetDependencies** `(*outputFileNodeAdapter) GetDependencies() []output.Dependency`
-
-**GetRelPath** `(*fileWithAPIAdapter) GetRelPath() string`
-
-**GetPackage** `(*fileWithAPIAdapter) GetPackage() string`
-
-**GetExportedDecls** `(*fileWithAPIAdapter) GetExportedDecls() []output.ExportedDecl`
-
-**Run** `Run(string, string, bool) (string, string, bool, error)`
-
-**Init** `Init(string, bool) error`
-
-**Refresh** `Refresh(string) error`
-
-#### Types
-
-**Preset** `Preset`
-- Properties:
-  - Name string
-  - Description string
-  - Config PresetConfig
-  - ArchitecturalGoals string
-  - Principles []string
-  - ViolationContext map[string]string
-  - RefactoringGuidance string
-
-**PresetConfig** `PresetConfig`
-- Properties:
-  - Structure PresetStructure
-  - Rules PresetRules
-
-**PresetStructure** `PresetStructure`
-- Properties:
-  - RequiredDirectories map[string]string
-  - AllowOtherDirectories bool
-
-**PresetRules** `PresetRules`
-- Properties:
-  - DirectoriesImport map[string][]string
-  - DetectUnused bool
-  - SharedExternalImports PresetSharedExternalImports
-  - TestFiles PresetTestFiles
-
-**PresetTestFiles** `PresetTestFiles`
-- Properties:
-  - Lint bool
-  - ExemptImports []string
-  - Location string
-
-**PresetSharedExternalImports** `PresetSharedExternalImports`
-- Properties:
-  - Detect bool
-  - Mode string
-  - Exclusions []string
-  - ExclusionPatterns []string
-
-**AvailablePresets** `AvailablePresets() []Preset`
-
-**GetPreset** `GetPreset(string) (*Preset, error)`
-
-**CreateConfigFromPreset** `CreateConfigFromPreset(string, bool) error`
-
-**ErrorPromptConfig** `ErrorPromptConfig`
+**ErrorContext** `ErrorContext`
 - Properties:
   - Enabled bool
+  - PresetName string
   - ArchitecturalGoals string
   - Principles []string
   - RefactoringGuidance string
+  - CoverageGuidance string
+  - BlackboxTestingGuidance string
 
-**RefreshConfigFromPreset** `RefreshConfigFromPreset(string) error`
+**FormatViolationsWithContext** `FormatViolationsWithContext([]Violation, *ErrorContext) string`
 
----
+**FormatViolations** `FormatViolations([]Violation) string`
 
-### config
-
-#### Types
-
-**Config** `Config`
-- Properties:
-  - Module string
-  - ScanPaths []string
-  - IgnorePaths []string
-  - Structure Structure
-  - Rules Rules
-  - PresetUsed string
-  - ErrorPrompt ErrorPrompt
-
-**ErrorPrompt** `ErrorPrompt`
-- Properties:
-  - Enabled bool
-  - ArchitecturalGoals string
-  - Principles []string
-  - RefactoringGuidance string
-
-**Structure** `Structure`
-- Properties:
-  - RequiredDirectories map[string]string
-  - AllowOtherDirectories bool
-
-**SharedExternalImports** `SharedExternalImports`
-- Properties:
-  - Mode string
-  - Exclusions []string
-  - ExclusionPatterns []string
-  - Detect bool
-
-**Rules** `Rules`
-- Properties:
-  - DirectoriesImport map[string][]string
-  - DetectUnused bool
-  - SharedExternalImports SharedExternalImports
-  - TestFiles TestFiles
-
-**TestFiles** `TestFiles`
-- Properties:
-  - Lint bool
-  - ExemptImports []string
-  - Location string
-
-**GetDirectoriesImport** `(*Config) GetDirectoriesImport() map[string][]string`
-
-**ShouldDetectUnused** `(*Config) ShouldDetectUnused() bool`
-
-**GetRequiredDirectories** `(*Config) GetRequiredDirectories() map[string]string`
-
-**ShouldAllowOtherDirectories** `(*Config) ShouldAllowOtherDirectories() bool`
-
-**GetPresetUsed** `(*Config) GetPresetUsed() string`
-
-**GetErrorPrompt** `(*Config) GetErrorPrompt() ErrorPrompt`
-
-**ShouldDetectSharedExternalImports** `(*Config) ShouldDetectSharedExternalImports() bool`
-
-**GetSharedExternalImportsMode** `(*Config) GetSharedExternalImportsMode() string`
-
-**GetSharedExternalImportsExclusions** `(*Config) GetSharedExternalImportsExclusions() []string`
-
-**GetSharedExternalImportsExclusionPatterns** `(*Config) GetSharedExternalImportsExclusionPatterns() []string`
-
-**ShouldLintTestFiles** `(*Config) ShouldLintTestFiles() bool`
-
-**GetTestExemptImports** `(*Config) GetTestExemptImports() []string`
-
-**GetTestFileLocation** `(*Config) GetTestFileLocation() string`
-
-**Load** `Load(string) (*Config, error)`
+**GenerateAPIMarkdown** `GenerateAPIMarkdown([]FileWithAPI) string`
 
 ---
 
 ## Statistics
 
-- **Total Files**: 9
-- **Total Packages**: 7
+- **Total Files**: 18
+- **Total Packages**: 16
 - **Required Directories**: 3/3 present
 - **Violations**: 0
-- **External Dependencies**: 11
+- **External Dependencies**: 15
 
 ---
 

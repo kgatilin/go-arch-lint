@@ -1,9 +1,12 @@
 package linter
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/kgatilin/go-arch-lint/internal/config"
 	"github.com/kgatilin/go-arch-lint/internal/coverage"
@@ -12,6 +15,54 @@ import (
 	"github.com/kgatilin/go-arch-lint/internal/scanner"
 	"github.com/kgatilin/go-arch-lint/internal/validator"
 )
+
+// runStaticcheckTool executes staticcheck on the project and returns formatted output
+func runStaticcheckTool(projectPath string) (string, bool, error) {
+	// Check if staticcheck is available
+	if _, err := exec.LookPath("staticcheck"); err != nil {
+		return "", false, fmt.Errorf("staticcheck not found in PATH. Install with: go install honnef.co/go/tools/cmd/staticcheck@latest")
+	}
+
+	// Run staticcheck
+	cmd := exec.Command("staticcheck", "./...")
+	cmd.Dir = projectPath
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	// staticcheck returns non-zero exit code if issues are found
+	hasIssues := err != nil
+
+	// Combine stdout and stderr
+	output := strings.TrimSpace(stdout.String())
+	if stderrStr := strings.TrimSpace(stderr.String()); stderrStr != "" {
+		if output != "" {
+			output += "\n" + stderrStr
+		} else {
+			output = stderrStr
+		}
+	}
+
+	// Format output - always show results section
+	var formatted strings.Builder
+	formatted.WriteString("\n")
+	formatted.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	formatted.WriteString("STATICCHECK RESULTS\n")
+	formatted.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	formatted.WriteString("\n")
+
+	if output != "" {
+		formatted.WriteString(output)
+		formatted.WriteString("\n")
+	} else {
+		formatted.WriteString("✓ No issues found\n")
+	}
+
+	return formatted.String(), hasIssues, nil
+}
 
 // graphAdapter adapts graph.Graph to validator.Graph interface
 type graphAdapter struct {
@@ -103,7 +154,7 @@ func (fwa *fileWithAPIAdapter) GetExportedDecls() []output.ExportedDecl {
 }
 
 // Run executes the linter on the specified project path
-func Run(projectPath string, format string, detailed bool) (string, string, bool, error) {
+func Run(projectPath string, format string, detailed bool, runStaticcheck bool) (string, string, bool, error) {
 	// Load configuration
 	cfg, err := config.Load(projectPath)
 	if err != nil {
@@ -240,6 +291,31 @@ func Run(projectPath string, format string, detailed bool) (string, string, bool
 
 	// Determine if violations should cause build failure (respect warn mode)
 	shouldFail := shouldFailBuild(violations, cfg)
+
+	// Run staticcheck if enabled
+	var staticcheckFailed bool
+	if runStaticcheck {
+		staticcheckOutput, hasIssues, err := runStaticcheckTool(projectPath)
+		if err != nil {
+			// If staticcheck is not available or fails to run, show error but don't fail build
+			staticcheckOutput = fmt.Sprintf("\n⚠ Staticcheck error: %v\n", err)
+		}
+		if staticcheckOutput != "" {
+			// Append staticcheck output to violations
+			if violationsOutput != "" {
+				violationsOutput += "\n"
+			}
+			violationsOutput += staticcheckOutput
+		}
+		if hasIssues {
+			staticcheckFailed = true
+		}
+	}
+
+	// Update shouldFail to include staticcheck failures
+	if staticcheckFailed {
+		shouldFail = true
+	}
 
 	return graphOutput, violationsOutput, shouldFail, nil
 }
@@ -479,7 +555,7 @@ func Init(projectPath, preset string, createDirs bool) error {
 	}
 
 	// Generate comprehensive documentation (structure + rules + dependencies + API)
-	fullDocsOutput, _, _, err := Run(projectPath, "full", true)
+	fullDocsOutput, _, _, err := Run(projectPath, "full", true, false)
 	if err != nil {
 		return fmt.Errorf("failed to generate documentation: %w", err)
 	}
