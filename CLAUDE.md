@@ -370,6 +370,14 @@ error_prompt:
 # Build the binary
 go build -o go-arch-lint ./cmd/go-arch-lint
 
+# Build with a specific version (for releases)
+go build -ldflags "-X main.version=v1.0.0" -o go-arch-lint ./cmd/go-arch-lint
+
+# Check version
+./go-arch-lint version
+./go-arch-lint -v
+./go-arch-lint --version
+
 # Run all tests
 go test ./...
 

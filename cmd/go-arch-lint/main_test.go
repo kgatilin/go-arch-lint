@@ -1648,3 +1648,65 @@ func Run() {
 	}
 }
 
+func TestCLI_Version(t *testing.T) {
+	// Test -version flag
+	cmd := exec.Command(binaryPath, "-version")
+	output, err := cmd.CombinedOutput()
+	outputStr := string(output)
+
+	// Should succeed
+	if err != nil {
+		t.Errorf("expected exit code 0 for -version, got error: %v\nOutput: %s", err, output)
+	}
+
+	exitCode := cmd.ProcessState.ExitCode()
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 for -version, got %d", exitCode)
+	}
+
+	// Should contain version information
+	if !strings.Contains(outputStr, "go-arch-lint version") {
+		t.Errorf("expected output to contain 'go-arch-lint version', got: %s", outputStr)
+	}
+
+	// Test --version flag
+	cmd = exec.Command(binaryPath, "--version")
+	output, err = cmd.CombinedOutput()
+	outputStr = string(output)
+
+	// Should succeed
+	if err != nil {
+		t.Errorf("expected exit code 0 for --version, got error: %v\nOutput: %s", err, output)
+	}
+
+	exitCode = cmd.ProcessState.ExitCode()
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 for --version, got %d", exitCode)
+	}
+
+	// Should contain version information
+	if !strings.Contains(outputStr, "go-arch-lint version") {
+		t.Errorf("expected output to contain 'go-arch-lint version', got: %s", outputStr)
+	}
+
+	// Test version subcommand
+	cmd = exec.Command(binaryPath, "version")
+	output, err = cmd.CombinedOutput()
+	outputStr = string(output)
+
+	// Should succeed
+	if err != nil {
+		t.Errorf("expected exit code 0 for version subcommand, got error: %v\nOutput: %s", err, output)
+	}
+
+	exitCode = cmd.ProcessState.ExitCode()
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 for version subcommand, got %d", exitCode)
+	}
+
+	// Should contain version information
+	if !strings.Contains(outputStr, "go-arch-lint version") {
+		t.Errorf("expected output to contain 'go-arch-lint version', got: %s", outputStr)
+	}
+}
+
