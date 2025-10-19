@@ -16,6 +16,9 @@ Or build from source:
 git clone https://github.com/kgatilin/go-arch-lint.git
 cd go-arch-lint
 go build -o go-arch-lint ./cmd/go-arch-lint
+
+# To build with a specific version:
+go build -ldflags "-X main.version=v1.0.0" -o go-arch-lint ./cmd/go-arch-lint
 ```
 
 ## Quick Start
@@ -61,6 +64,9 @@ go-arch-lint init [path]
 
 # Generate comprehensive documentation
 go-arch-lint docs [path]
+
+# Show version information
+go-arch-lint version
 ```
 
 ### Flags
@@ -84,6 +90,11 @@ go-arch-lint docs [path]
 ### Examples
 
 ```bash
+# Check version
+go-arch-lint version
+go-arch-lint -v
+go-arch-lint --version
+
 # Scan current directory (shows only violations if any)
 go-arch-lint .
 

@@ -9,6 +9,10 @@ import (
 	"github.com/kgatilin/go-arch-lint/pkg/linter"
 )
 
+// version is set via -ldflags during build
+// Example: go build -ldflags "-X main.version=v1.0.0" ./cmd/go-arch-lint
+var version = "0.0.1"
+
 func printHelp() {
 	fmt.Println(`go-arch-lint - Go architecture linter that enforces strict dependency rules
 
@@ -20,6 +24,7 @@ COMMANDS:
     init              Initialize .goarchlint config with a preset
     refresh           Refresh error_prompt section from preset (keeps custom rules)
     docs              Generate comprehensive architecture documentation
+    version           Show version information
     help              Show this help message
 
 DEFAULT COMMAND FLAGS:
@@ -133,6 +138,9 @@ func run() int {
 		switch os.Args[1] {
 		case "-h", "--help", "help":
 			printHelp()
+			return 0
+		case "-v", "-version", "--version", "version":
+			fmt.Printf("go-arch-lint version %s\n", version)
 			return 0
 		case "init":
 			return runInit()
