@@ -181,11 +181,18 @@ func buildPackagesByLayer(files []FileWithAPI) LayerPackages {
 		pkg := packageMap[pkgPath]
 		pkg.FileCount++
 
+		// Skip test files when collecting key exports
+		isTestFile := strings.HasSuffix(relPath, "_test.go")
+
 		// Collect unique key exports (types and important functions)
 		for _, decl := range file.GetExportedDecls() {
 			pkg.ExportCount++
-			// Keep first 3 exports as key exports
-			if len(pkg.KeyExports) < 3 {
+
+			// Only add to key exports if:
+			// 1. We still need more key exports (< 3)
+			// 2. It's not from a test file
+			// 3. It's not a test function (doesn't start with "Test")
+			if len(pkg.KeyExports) < 3 && !isTestFile && !strings.HasPrefix(decl.GetName(), "Test") {
 				pkg.KeyExports = append(pkg.KeyExports, decl.GetName())
 			}
 		}
