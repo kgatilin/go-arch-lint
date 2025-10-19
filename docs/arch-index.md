@@ -9,7 +9,7 @@
 - **Module**: (detected from go.mod)
 - **Status**: ✓ 0 violations
 - **Packages**: 16
-- **Files**: 20
+- **Files**: 21
 
 ## Architecture Summary
 
@@ -26,7 +26,6 @@
 
 - **main** (`cmd/go-arch-lint`)
   - Files: 2 | Exports: 24
-  - Key exports: TestMain, TestCLI_NoViolations_ExitCode0, TestCLI_WithViolations_ExitCode1
   - **Details**: `go-arch-lint -format=package cmd/go-arch-lint`
 
 
@@ -56,7 +55,7 @@
   - **Details**: `go-arch-lint -format=package internal/graph`
 
 - **output** (`internal/output`)
-  - Files: 5 | Exports: 81
+  - Files: 6 | Exports: 83
   - Key exports: StructureInfo, RulesInfo, FullDocumentation
   - **Details**: `go-arch-lint -format=package internal/output`
 
@@ -93,7 +92,7 @@ To get detailed information about specific packages:
 
 ## Statistics
 
-- **Total Files**: 20
+- **Total Files**: 21
 - **Total Packages**: 16
 - **Violations**: 0
 - **External Dependencies**: 15
