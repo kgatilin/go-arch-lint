@@ -359,6 +359,15 @@ func extractExportedDecls(file *ast.File) []ExportedDecl {
 		case *ast.FuncDecl:
 			// Only export if function name is exported
 			if d.Name.IsExported() {
+				// For methods (functions with receivers), also check if receiver type is exported
+				if d.Recv != nil && len(d.Recv.List) > 0 {
+					// This is a method - check if receiver type is exported
+					if !isReceiverTypeExported(d.Recv.List[0].Type) {
+						// Skip methods on non-exported types
+						continue
+					}
+				}
+
 				sig := buildFuncSignature(d)
 				decls = append(decls, ExportedDecl{
 					Name:      d.Name.Name,
@@ -401,6 +410,30 @@ func extractExportedDecls(file *ast.File) []ExportedDecl {
 	}
 
 	return decls
+}
+
+// isReceiverTypeExported checks if the receiver type is exported
+// For a method to be part of the public API, both the method name and receiver type must be exported
+func isReceiverTypeExported(typeExpr ast.Expr) bool {
+	// Extract the base type name from the receiver type
+	var typeName string
+
+	switch t := typeExpr.(type) {
+	case *ast.Ident:
+		// Simple type: MyType or myType
+		typeName = t.Name
+	case *ast.StarExpr:
+		// Pointer type: *MyType or *myType
+		if ident, ok := t.X.(*ast.Ident); ok {
+			typeName = ident.Name
+		}
+	default:
+		// Other types (rare for receivers) - be conservative and exclude
+		return false
+	}
+
+	// Check if the type name starts with uppercase (exported)
+	return len(typeName) > 0 && typeName[0] >= 'A' && typeName[0] <= 'Z'
 }
 
 func buildFuncSignature(fn *ast.FuncDecl) string {

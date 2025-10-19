@@ -249,9 +249,19 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool, 
 			ExportCount:  0,
 		}
 
-		// Count exports
+		// Count exports (excluding test functions)
 		for _, file := range outFiles {
-			pkgDoc.ExportCount += len(file.GetExportedDecls())
+			// Skip test files
+			isTestFile := strings.HasSuffix(file.GetRelPath(), "_test.go")
+
+			for _, decl := range file.GetExportedDecls() {
+				isTestExport := strings.HasPrefix(decl.GetName(), "Test") || strings.HasPrefix(decl.GetName(), "Benchmark")
+
+				// Only count non-test exports
+				if !isTestFile && !isTestExport {
+					pkgDoc.ExportCount++
+				}
+			}
 		}
 
 		packageOutput := output.GeneratePackageDocumentation(pkgDoc)
