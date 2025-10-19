@@ -311,6 +311,30 @@ func mergeRules(base Rules, override *Rules) Rules {
 		}
 	}
 
+	// Handle boolean fields
+	// Since Go booleans default to false, we can't distinguish between "not set" and "set to false"
+	// The pragmatic approach: if a boolean is set to true in overrides, apply it (opt-in features)
+	// For features that default to true in presets, users would need to set them false in overrides
+	// to disable, which we also apply (though it will match the default false from unmarshaling)
+	if override.Staticcheck {
+		result.Staticcheck = true
+	}
+	if override.DetectUnused {
+		result.DetectUnused = true
+	}
+	if override.SharedExternalImports.Detect {
+		result.SharedExternalImports.Detect = true
+	}
+	if override.TestFiles.Lint {
+		result.TestFiles.Lint = true
+	}
+	if override.TestFiles.RequireBlackbox {
+		result.TestFiles.RequireBlackbox = true
+	}
+	if override.TestCoverage.Enabled {
+		result.TestCoverage.Enabled = true
+	}
+
 	return result
 }
 

@@ -22,4 +22,4 @@ go.work
 *.swo
 *~
 
-.darwinflow
+.darwinflow.goarchlint.old-format-backup
