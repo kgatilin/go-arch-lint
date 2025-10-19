@@ -97,7 +97,7 @@ DOCS COMMAND:
         go-arch-lint docs --output=ARCH_INDEX.md          # Custom location
 
     To get details about a specific package:
-        go-arch-lint -format=package pkg/linter           # (Not yet implemented)
+        go-arch-lint -format=package pkg/linter           # Package details
 
 EXAMPLES:
     # Validate current directory
@@ -114,6 +114,9 @@ EXAMPLES:
 
     # Show public API
     go-arch-lint -format=api .
+
+    # Get details for a specific package
+    go-arch-lint -format=package pkg/linter
 
     # Generate architecture index
     go-arch-lint docs
@@ -161,17 +164,33 @@ func run() int {
 
 	// Parse flags
 	flag.Usage = printUsage
-	formatFlag := flag.String("format", "", "Output format: markdown (deps), api (public API), full (complete docs)")
+	formatFlag := flag.String("format", "", "Output format: markdown (deps), api (public API), package (single package details)")
 	detailedFlag := flag.Bool("detailed", false, "Show detailed method-level dependencies (with -format=markdown)")
 	staticcheckFlag := flag.Bool("staticcheck", false, "Run staticcheck and include results")
 	strictFlag := flag.Bool("strict", true, "Fail on any violations (default: true)")
 	exitZeroFlag := flag.Bool("exit-zero", false, "Always exit with code 0, even on violations")
 	flag.Parse()
 
-	// Get project path
+	// Handle format=package specially
 	projectPath := "."
-	if flag.NArg() > 0 {
-		projectPath = flag.Arg(0)
+	packagePath := ""
+
+	if *formatFlag == "package" {
+		// For package format, first argument is the package path
+		if flag.NArg() < 1 {
+			fmt.Fprintf(os.Stderr, "Error: package path required for -format=package\n")
+			fmt.Fprintf(os.Stderr, "Usage: go-arch-lint -format=package <package-path>\n")
+			fmt.Fprintf(os.Stderr, "Example: go-arch-lint -format=package pkg/linter\n")
+			return 2
+		}
+		packagePath = flag.Arg(0)
+		// Project path is current directory
+		projectPath = "."
+	} else {
+		// For other formats, first argument is project path
+		if flag.NArg() > 0 {
+			projectPath = flag.Arg(0)
+		}
 	}
 
 	// Make path absolute
@@ -182,7 +201,7 @@ func run() int {
 	}
 
 	// Run linter
-	graphOutput, violationsOutput, shouldFail, err := linter.Run(absPath, *formatFlag, *detailedFlag, *staticcheckFlag)
+	graphOutput, violationsOutput, shouldFail, err := linter.Run(absPath, *formatFlag, *detailedFlag, *staticcheckFlag, packagePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 2
@@ -342,7 +361,7 @@ func runDocs() int {
 
 	// Generate index documentation
 	fmt.Println("Generating architecture index...")
-	indexOutput, violationsOutput, shouldFail, err := linter.Run(absPath, "index", false, false)
+	indexOutput, violationsOutput, shouldFail, err := linter.Run(absPath, "index", false, false, "")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 2

@@ -154,11 +154,108 @@ func (fwa *fileWithAPIAdapter) GetExportedDecls() []output.ExportedDecl {
 }
 
 // Run executes the linter on the specified project path
-func Run(projectPath string, format string, detailed bool, runStaticcheck bool) (string, string, bool, error) {
+// packagePath is only used when format is "package" to specify which package to document
+func Run(projectPath string, format string, detailed bool, runStaticcheck bool, packagePath string) (string, string, bool, error) {
 	// Load configuration
 	cfg, err := config.Load(projectPath)
 	if err != nil {
 		return "", "", false, err
+	}
+
+	// Handle package format separately
+	if format == "package" {
+		if packagePath == "" {
+			return "", "", false, fmt.Errorf("package path required for -format=package")
+		}
+
+		s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths, cfg.ShouldLintTestFiles())
+		filesWithAPI, err := s.ScanWithAPI(cfg.ScanPaths)
+		if err != nil {
+			return "", "", false, err
+		}
+
+		// Filter files to only those in the specified package directory
+		packageFiles := []scanner.FileInfoWithAPI{}
+		for _, file := range filesWithAPI {
+			// Extract directory from file path
+			fileDir := file.RelPath
+			if idx := strings.LastIndex(file.RelPath, "/"); idx >= 0 {
+				fileDir = file.RelPath[:idx]
+			}
+
+			if fileDir == packagePath {
+				packageFiles = append(packageFiles, file)
+			}
+		}
+
+		if len(packageFiles) == 0 {
+			return "", "", false, fmt.Errorf("no files found in package: %s", packagePath)
+		}
+
+		// Convert to output.FileWithAPI interface
+		outFiles := make([]output.FileWithAPI, len(packageFiles))
+		for i := range packageFiles {
+			outFiles[i] = &fileWithAPIAdapter{file: &packageFiles[i]}
+		}
+
+		// Build graph to get dependencies for this package
+		files, err := s.Scan(cfg.ScanPaths)
+		if err != nil {
+			return "", "", false, err
+		}
+		graphFiles := make([]graph.FileInfo, len(files))
+		for i, f := range files {
+			graphFiles[i] = f
+		}
+		g := graph.Build(graphFiles, cfg.Module)
+
+		// Collect dependencies from files in this package
+		packageDeps := make(map[string]output.Dependency)
+		for _, node := range g.Nodes {
+			// Check if this node is in our package
+			nodeDir := node.RelPath
+			if idx := strings.LastIndex(node.RelPath, "/"); idx >= 0 {
+				nodeDir = node.RelPath[:idx]
+			}
+
+			if nodeDir == packagePath {
+				// Add all dependencies from this file
+				for _, dep := range node.Dependencies {
+					key := dep.ImportPath
+					if dep.IsLocal {
+						key = dep.LocalPath
+					}
+					if _, exists := packageDeps[key]; !exists {
+						packageDeps[key] = &dep
+					}
+				}
+			}
+		}
+
+		// Convert to slice
+		deps := make([]output.Dependency, 0, len(packageDeps))
+		for _, dep := range packageDeps {
+			deps = append(deps, dep)
+		}
+
+		// Create package documentation
+		packageName := packageFiles[0].Package
+		pkgDoc := output.PackageDocumentation{
+			PackageName:  packageName,
+			PackagePath:  packagePath,
+			Files:        outFiles,
+			Dependencies: deps,
+			FileCount:    len(packageFiles),
+			ExportCount:  0,
+		}
+
+		// Count exports
+		for _, file := range outFiles {
+			pkgDoc.ExportCount += len(file.GetExportedDecls())
+		}
+
+		packageOutput := output.GeneratePackageDocumentation(pkgDoc)
+		return packageOutput, "", false, nil
 	}
 
 	// Handle API format separately
@@ -620,7 +717,7 @@ func Init(projectPath, preset string, createDirs bool) error {
 	}
 
 	// Generate comprehensive documentation (structure + rules + dependencies + API)
-	fullDocsOutput, _, _, err := Run(projectPath, "full", true, false)
+	fullDocsOutput, _, _, err := Run(projectPath, "full", true, false, "")
 	if err != nil {
 		return fmt.Errorf("failed to generate documentation: %w", err)
 	}
