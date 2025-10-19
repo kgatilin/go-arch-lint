@@ -374,6 +374,56 @@ func TestPrintSummary_EmptySummaries(t *testing.T) {
 	// If no panic, test passes
 }
 
+func TestRunner_Run_NonExistentDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create go.mod: %v", err)
+	}
+
+	// Create cmd package (but NOT pkg)
+	cmdDir := filepath.Join(tmpDir, "cmd")
+	err = os.MkdirAll(cmdDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create cmd directory: %v", err)
+	}
+	cmdFile := `package main
+
+func main() {}
+`
+	err = os.WriteFile(filepath.Join(cmdDir, "main.go"), []byte(cmdFile), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create cmd file: %v", err)
+	}
+
+	// Run coverage on cmd and pkg directories (pkg doesn't exist)
+	runner := coverage.New(tmpDir, "github.com/test/project")
+	results, err := runner.Run([]string{"cmd", "pkg", "internal"})
+
+	// Should NOT return an error - should gracefully skip non-existent directories
+	if err != nil {
+		t.Fatalf("Run() should not error on non-existent directories, got error = %v", err)
+	}
+
+	// Should only find 1 package (cmd), not pkg or internal
+	if len(results) != 1 {
+		t.Errorf("Run() found %d packages, want 1 (only cmd exists)", len(results))
+	}
+
+	// Verify it found the cmd package
+	if len(results) > 0 {
+		if results[0].PackagePath != "github.com/test/project/cmd" {
+			t.Errorf("Expected to find cmd package, got %s", results[0].PackagePath)
+		}
+	}
+}
+
 // Helper function to find a summary by directory name
 func findSummary(summaries []coverage.DirectorySummary, dir string) *coverage.DirectorySummary {
 	for i := range summaries {
