@@ -70,7 +70,7 @@ func Run() {}
 	}
 
 	// Run linter with markdown format
-	graphOutput, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false)
+	graphOutput, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -144,7 +144,7 @@ const Version = "1.0"
 	}
 
 	// Run linter with api format
-	apiOutput, violationsOutput, _, err := linter.Run(tmpDir, "api", false, false)
+	apiOutput, violationsOutput, _, err := linter.Run(tmpDir, "api", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -235,7 +235,7 @@ func Helper() {}
 	}
 
 	// Run linter
-	_, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false)
+	_, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestRun_InvalidConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// No .goarchlint file
-	_, _, _, err := linter.Run(tmpDir, "markdown", false, false)
+	_, _, _, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err == nil {
 		t.Error("expected error for missing config")
 	}
@@ -338,7 +338,7 @@ func Query() error {
 	}
 
 	// Run linter
-	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false)
+	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -438,7 +438,7 @@ func Query() error {
 	}
 
 	// Run linter
-	_, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false)
+	_, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -516,7 +516,7 @@ func Query() error {
 	}
 
 	// Run linter
-	_, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false)
+	_, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -592,7 +592,7 @@ func Query() error {
 	}
 
 	// Run linter
-	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false)
+	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -666,7 +666,7 @@ func Save() error {
 	}
 
 	// Run linter
-	_, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false)
+	_, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -776,7 +776,7 @@ func DoSomething() {}
 	}
 
 	// Run linter
-	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false)
+	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -892,7 +892,7 @@ func DoSomething() {}
 	}
 
 	// Run linter
-	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false)
+	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -1028,7 +1028,7 @@ func main() {
 	}
 
 	// Run linter
-	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false)
+	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -1149,7 +1149,7 @@ func main() {
 	}
 
 	// Run linter
-	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false)
+	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -1291,7 +1291,7 @@ func TestLoad(t *testing.T) {
 	}
 
 	// Run linter
-	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false)
+	_, violationsOutput, shouldFail, err := linter.Run(tmpDir, "markdown", false, false, "")
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
