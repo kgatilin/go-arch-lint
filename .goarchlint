@@ -118,17 +118,13 @@ preset:
       4. If you can't test adequately through the public API, consider whether your API design needs improvement
 
 # Custom overrides - preserved during 'refresh'
+# Note: Exclusion lists are additive (merged with preset defaults)
 overrides:
   rules:
     staticcheck: true  # Enable staticcheck integration
     shared_external_imports:
       exclusions:
-        - fmt
-        - strings
-        - errors
-        - time
-        - context
-        - gopkg.in/yaml.v3  # Custom: allow yaml library across layers
+        - gopkg.in/yaml.v3  # Additional: allow yaml library across layers
     test_coverage:
       package_thresholds:
         cmd: 0  # Custom: cmd is just a thin wrapper, no coverage required

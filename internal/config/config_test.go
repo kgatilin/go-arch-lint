@@ -655,3 +655,125 @@ error_prompt:
 		t.Errorf("GetErrorPrompt().ArchitecturalGoals = %s, want Old format goals", errPrompt.ArchitecturalGoals)
 	}
 }
+
+func TestConfig_AdditiveExclusions(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := "module example.com/test\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create config with preset and additional exclusions in overrides
+	configYAML := `
+module: example.com/test
+
+preset:
+  name: simple
+  structure:
+    required_directories:
+      cmd: "Commands"
+  rules:
+    shared_external_imports:
+      detect: true
+      mode: warn
+      exclusions:
+        - fmt
+        - strings
+        - errors
+      exclusion_patterns:
+        - encoding/*
+    test_files:
+      exempt_imports:
+        - testing
+
+overrides:
+  rules:
+    shared_external_imports:
+      exclusions:
+        - gopkg.in/yaml.v3  # Additional exclusion
+        - github.com/foo/bar  # Another additional exclusion
+      exclusion_patterns:
+        - crypto/*  # Additional pattern
+    test_files:
+      exempt_imports:
+        - github.com/stretchr/testify/assert  # Additional exempt import
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load config
+	cfg, err := config.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Verify exclusions are additive (preset + override)
+	exclusions := cfg.GetSharedExternalImportsExclusions()
+	expectedExclusions := map[string]bool{
+		"fmt":                  true, // from preset
+		"strings":              true, // from preset
+		"errors":               true, // from preset
+		"gopkg.in/yaml.v3":     true, // from override
+		"github.com/foo/bar":   true, // from override
+	}
+
+	if len(exclusions) != len(expectedExclusions) {
+		t.Errorf("Expected %d exclusions, got %d: %v", len(expectedExclusions), len(exclusions), exclusions)
+	}
+
+	for _, excl := range exclusions {
+		if !expectedExclusions[excl] {
+			t.Errorf("Unexpected exclusion: %s", excl)
+		}
+	}
+
+	for excl := range expectedExclusions {
+		found := false
+		for _, e := range exclusions {
+			if e == excl {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Missing expected exclusion: %s", excl)
+		}
+	}
+
+	// Verify exclusion patterns are additive
+	patterns := cfg.GetSharedExternalImportsExclusionPatterns()
+	expectedPatterns := map[string]bool{
+		"encoding/*": true, // from preset
+		"crypto/*":   true, // from override
+	}
+
+	if len(patterns) != len(expectedPatterns) {
+		t.Errorf("Expected %d patterns, got %d: %v", len(expectedPatterns), len(patterns), patterns)
+	}
+
+	for _, pattern := range patterns {
+		if !expectedPatterns[pattern] {
+			t.Errorf("Unexpected pattern: %s", pattern)
+		}
+	}
+
+	// Verify exempt imports are additive
+	exemptImports := cfg.GetTestExemptImports()
+	expectedExempt := map[string]bool{
+		"testing":                               true, // from preset
+		"github.com/stretchr/testify/assert":    true, // from override
+	}
+
+	if len(exemptImports) != len(expectedExempt) {
+		t.Errorf("Expected %d exempt imports, got %d: %v", len(expectedExempt), len(exemptImports), exemptImports)
+	}
+
+	for _, ei := range exemptImports {
+		if !expectedExempt[ei] {
+			t.Errorf("Unexpected exempt import: %s", ei)
+		}
+	}
+}

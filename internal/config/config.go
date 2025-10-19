@@ -233,6 +233,31 @@ func (c *Config) ShouldRunStaticcheck() bool {
 	return c.getMerged().Rules.Staticcheck
 }
 
+// mergeStringSlices merges two string slices, avoiding duplicates
+func mergeStringSlices(base, override []string) []string {
+	// Create a set of existing items
+	seen := make(map[string]bool)
+	result := make([]string, 0, len(base)+len(override))
+
+	// Add all base items
+	for _, item := range base {
+		if !seen[item] {
+			result = append(result, item)
+			seen[item] = true
+		}
+	}
+
+	// Add override items that aren't already present
+	for _, item := range override {
+		if !seen[item] {
+			result = append(result, item)
+			seen[item] = true
+		}
+	}
+
+	return result
+}
+
 // mergeStructure merges override into base
 func mergeStructure(base Structure, override *Structure) Structure {
 	if override == nil {
@@ -283,16 +308,19 @@ func mergeRules(base Rules, override *Rules) Rules {
 	if override.SharedExternalImports.Mode != "" {
 		result.SharedExternalImports.Mode = override.SharedExternalImports.Mode
 	}
+	// Additive: append override exclusions to preset exclusions (avoiding duplicates)
 	if override.SharedExternalImports.Exclusions != nil {
-		result.SharedExternalImports.Exclusions = override.SharedExternalImports.Exclusions
+		result.SharedExternalImports.Exclusions = mergeStringSlices(result.SharedExternalImports.Exclusions, override.SharedExternalImports.Exclusions)
 	}
+	// Additive: append override exclusion patterns to preset patterns (avoiding duplicates)
 	if override.SharedExternalImports.ExclusionPatterns != nil {
-		result.SharedExternalImports.ExclusionPatterns = override.SharedExternalImports.ExclusionPatterns
+		result.SharedExternalImports.ExclusionPatterns = mergeStringSlices(result.SharedExternalImports.ExclusionPatterns, override.SharedExternalImports.ExclusionPatterns)
 	}
 
 	// Merge TestFiles
+	// Additive: append override exempt imports to preset exempt imports (avoiding duplicates)
 	if override.TestFiles.ExemptImports != nil {
-		result.TestFiles.ExemptImports = override.TestFiles.ExemptImports
+		result.TestFiles.ExemptImports = mergeStringSlices(result.TestFiles.ExemptImports, override.TestFiles.ExemptImports)
 	}
 	if override.TestFiles.Location != "" {
 		result.TestFiles.Location = override.TestFiles.Location
@@ -350,8 +378,9 @@ func mergeErrorPrompt(base ErrorPrompt, override *ErrorPrompt) ErrorPrompt {
 	if override.ArchitecturalGoals != "" {
 		result.ArchitecturalGoals = override.ArchitecturalGoals
 	}
+	// Additive: append override principles to preset principles (avoiding duplicates)
 	if override.Principles != nil {
-		result.Principles = override.Principles
+		result.Principles = mergeStringSlices(result.Principles, override.Principles)
 	}
 	if override.RefactoringGuidance != "" {
 		result.RefactoringGuidance = override.RefactoringGuidance
