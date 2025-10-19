@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/kgatilin/go-arch-lint/internal/config"
+	"github.com/kgatilin/go-arch-lint/internal/coverage"
 	"github.com/kgatilin/go-arch-lint/internal/graph"
 	"github.com/kgatilin/go-arch-lint/internal/output"
 	"github.com/kgatilin/go-arch-lint/internal/scanner"
@@ -174,9 +175,26 @@ func Run(projectPath string, format string, detailed bool) (string, string, bool
 		g = graph.Build(graphFiles, cfg.Module)
 	}
 
-	// Validate using adapter (with project path for structure validation)
+	// Run coverage analysis if enabled
 	validatorGraph := &graphAdapter{g: g}
 	v := validator.NewWithPath(cfg, validatorGraph, projectPath)
+
+	if cfg.IsCoverageEnabled() {
+		coverageRunner := coverage.New(projectPath, cfg.Module)
+		coverageResults, err := coverageRunner.Run(cfg.ScanPaths)
+		if err != nil {
+			// Log error but don't fail - coverage might not be critical
+			fmt.Printf("Warning: Failed to run coverage analysis: %v\n", err)
+		} else {
+			// Convert to validator.PackageCoverage interface
+			validatorCoverage := make([]validator.PackageCoverage, len(coverageResults))
+			for i := range coverageResults {
+				validatorCoverage[i] = coverageResults[i]
+			}
+			v.SetCoverageResults(validatorCoverage)
+		}
+	}
+
 	violations := v.Validate()
 
 	// Convert violations to output.Violation interface
@@ -206,6 +224,7 @@ func Run(projectPath string, format string, detailed bool) (string, string, bool
 			ArchitecturalGoals:  errorPrompt.ArchitecturalGoals,
 			Principles:          errorPrompt.Principles,
 			RefactoringGuidance: errorPrompt.RefactoringGuidance,
+			CoverageGuidance:    errorPrompt.CoverageGuidance,
 		}
 		violationsOutput = output.FormatViolationsWithContext(outViolations, errorContext)
 	} else {

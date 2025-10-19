@@ -17,6 +17,7 @@ type Preset struct {
 	Principles          []string
 	ViolationContext    map[string]string
 	RefactoringGuidance string
+	CoverageGuidance    string
 }
 
 // PresetConfig mirrors the config structure for YAML generation
@@ -30,11 +31,18 @@ type PresetStructure struct {
 	AllowOtherDirectories bool              `yaml:"allow_other_directories"`
 }
 
+type PresetTestCoverage struct {
+	Enabled           bool               `yaml:"enabled"`
+	Threshold         float64            `yaml:"threshold"`
+	PackageThresholds map[string]float64 `yaml:"package_thresholds,omitempty"`
+}
+
 type PresetRules struct {
 	DirectoriesImport     map[string][]string         `yaml:"directories_import"`
 	DetectUnused          bool                        `yaml:"detect_unused"`
 	SharedExternalImports PresetSharedExternalImports `yaml:"shared_external_imports"`
 	TestFiles             PresetTestFiles             `yaml:"test_files"`
+	TestCoverage          PresetTestCoverage          `yaml:"test_coverage"`
 }
 
 type PresetTestFiles struct {
@@ -90,6 +98,27 @@ Example refactoring:
 - Before: internal/domain/user.go imports internal/infra/database
 - After: internal/domain/user.go defines UserRepository interface, internal/infra/postgres.go implements it
 `,
+			CoverageGuidance: `
+**Test Coverage Philosophy for DDD:**
+
+Coverage thresholds reflect the criticality of each layer:
+- **internal/domain (90%)**: The highest bar. Domain logic is pure, side-effect-free, and easiest to test. Comprehensive unit tests for all business rules, validation, and domain services.
+- **internal/app (80%)**: High coverage for use cases and orchestration. Test application services with mocked domain and infrastructure dependencies.
+- **internal/infra (60%)**: Moderate coverage. Focus on adapter logic, not external services. Use integration tests for critical paths, mock external APIs.
+- **cmd (40%)**: Basic coverage for CLI entry points. Ensure flags are parsed correctly and main workflows are wired properly.
+
+**Why test coverage matters in DDD:**
+- Domain tests serve as executable specifications of business rules
+- High domain coverage ensures business logic remains correct during refactoring
+- Application layer tests verify use case orchestration without infrastructure dependencies
+- Infrastructure tests validate adapters correctly implement domain interfaces
+
+**What to test:**
+- Domain: All business rules, validation logic, domain services, value object creation
+- Application: Use case orchestration, service coordination, transaction boundaries
+- Infrastructure: Adapter implementations, data mapping, external API integration logic
+- CLI: Flag parsing, command routing, basic end-to-end workflows
+`,
 			Config: PresetConfig{
 				Structure: PresetStructure{
 					RequiredDirectories: map[string]string{
@@ -133,6 +162,16 @@ Example refactoring:
 							"github.com/stretchr/testify/mock",
 						},
 					},
+					TestCoverage: PresetTestCoverage{
+						Enabled:   true,
+						Threshold: 75,
+						PackageThresholds: map[string]float64{
+							"cmd":             40,
+							"internal/domain": 90,
+							"internal/app":    80,
+							"internal/infra":  60,
+						},
+					},
 				},
 			},
 		},
@@ -173,6 +212,25 @@ Example refactoring:
 - Before: internal/users/service.go imports internal/database directly
 - After: internal/users/service.go defines UserRepository interface, pkg/app/app.go creates adapter, internal/database implements interface
 `,
+			CoverageGuidance: `
+**Test Coverage Philosophy for Simple Architecture:**
+
+Coverage thresholds reflect the purpose of each layer:
+- **internal (70%)**: High coverage for private implementation. Core business logic and domain primitives should be thoroughly tested with unit tests.
+- **pkg (60%)**: Good coverage for public APIs. Test the public interface comprehensively since external consumers depend on it.
+- **cmd (30%)**: Basic coverage for entry points. Focus on integration tests that verify main workflows and flag parsing.
+
+**Why test coverage matters:**
+- Unit tests in internal/ ensure core logic is correct and maintainable
+- Integration tests in pkg/ verify public APIs work as documented
+- E2E tests in cmd/ validate the complete application flow
+- High coverage enables safe refactoring without breaking functionality
+
+**What to test:**
+- internal/: All core business logic, data structures, algorithms, validation
+- pkg/: Public API functions, error handling, interface contracts
+- cmd/: CLI flag parsing, command execution, basic end-to-end workflows
+`,
 			Config: PresetConfig{
 				Structure: PresetStructure{
 					RequiredDirectories: map[string]string{
@@ -212,6 +270,15 @@ Example refactoring:
 							"github.com/stretchr/testify/assert",
 							"github.com/stretchr/testify/require",
 							"github.com/stretchr/testify/mock",
+						},
+					},
+					TestCoverage: PresetTestCoverage{
+						Enabled:   true,
+						Threshold: 60,
+						PackageThresholds: map[string]float64{
+							"cmd":      30,
+							"pkg":      60,
+							"internal": 70,
 						},
 					},
 				},
@@ -260,6 +327,28 @@ Example refactoring:
   - internal/adapters/postgres/user_repo.go implements UserRepository
   - cmd/main.go wires PostgresUserRepo into UserService via UserRepository interface
 `,
+			CoverageGuidance: `
+**Test Coverage Philosophy for Hexagonal Architecture:**
+
+Coverage thresholds reflect hexagonal principles:
+- **internal/core (90%)**: The highest priority. Core business logic should be pure, deterministic, and exhaustively tested without any adapters.
+- **internal/ports (85%)**: High coverage for interface contracts. Test port interfaces with mock implementations to verify contracts are well-defined.
+- **internal/adapters (60%)**: Moderate coverage. Focus on adapter logic that translates between ports and external systems. Mock external dependencies.
+- **cmd (40%)**: Basic coverage for wiring. Ensure dependency injection and application startup work correctly.
+
+**Why test coverage matters in hexagonal architecture:**
+- Core tests prove business logic works independently of infrastructure
+- Port tests validate interface contracts, enabling adapter substitution
+- Adapter tests ensure correct translation between core and external systems
+- High core coverage allows you to swap adapters confidently
+- Well-tested ports make it easy to add new adapters (e.g., switch from REST to gRPC)
+
+**What to test:**
+- Core: All business rules, domain logic, use cases - completely isolated from infrastructure
+- Ports: Interface contracts with mock implementations, verify method signatures and behaviors
+- Adapters: Data transformation, error handling, integration with external systems (use mocks)
+- CLI: Dependency wiring, startup sequence, basic command execution
+`,
 			Config: PresetConfig{
 				Structure: PresetStructure{
 					RequiredDirectories: map[string]string{
@@ -301,6 +390,16 @@ Example refactoring:
 							"github.com/stretchr/testify/assert",
 							"github.com/stretchr/testify/require",
 							"github.com/stretchr/testify/mock",
+						},
+					},
+					TestCoverage: PresetTestCoverage{
+						Enabled:   true,
+						Threshold: 75,
+						PackageThresholds: map[string]float64{
+							"cmd":               40,
+							"internal/core":     90,
+							"internal/ports":    85,
+							"internal/adapters": 60,
 						},
 					},
 				},
@@ -349,6 +448,7 @@ func CreateConfigFromPreset(projectPath, presetName string, createDirs bool) err
 			ArchitecturalGoals:  preset.ArchitecturalGoals,
 			Principles:          preset.Principles,
 			RefactoringGuidance: preset.RefactoringGuidance,
+			CoverageGuidance:    preset.CoverageGuidance,
 		},
 		Structure: preset.Config.Structure,
 		Rules:     preset.Config.Rules,
@@ -390,6 +490,7 @@ type ErrorPromptConfig struct {
 	ArchitecturalGoals  string   `yaml:"architectural_goals,omitempty"`
 	Principles          []string `yaml:"principles,omitempty"`
 	RefactoringGuidance string   `yaml:"refactoring_guidance,omitempty"`
+	CoverageGuidance    string   `yaml:"coverage_guidance,omitempty"`
 }
 
 func detectModuleFromGoMod(projectPath string) (string, error) {
@@ -490,6 +591,7 @@ func RefreshConfigFromPreset(projectPath, presetName string) error {
 			ArchitecturalGoals:  preset.ArchitecturalGoals,
 			Principles:          preset.Principles,
 			RefactoringGuidance: preset.RefactoringGuidance,
+			CoverageGuidance:    preset.CoverageGuidance,
 		},
 		Structure: preset.Config.Structure,
 		Rules:     preset.Config.Rules,

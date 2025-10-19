@@ -32,6 +32,24 @@ error_prompt:
         Example refactoring:
         - Before: internal/users/service.go imports internal/database directly
         - After: internal/users/service.go defines UserRepository interface, pkg/app/app.go creates adapter, internal/database implements interface
+  coverage_guidance: |4
+        **Test Coverage Philosophy for Simple Architecture:**
+
+        Coverage thresholds reflect the purpose of each layer:
+        - **internal (70%)**: High coverage for private implementation. Core business logic and domain primitives should be thoroughly tested with unit tests.
+        - **pkg (60%)**: Good coverage for public APIs. Test the public interface comprehensively since external consumers depend on it.
+        - **cmd (30%)**: Basic coverage for entry points. Focus on integration tests that verify main workflows and flag parsing.
+
+        **Why test coverage matters:**
+        - Unit tests in internal/ ensure core logic is correct and maintainable
+        - Integration tests in pkg/ verify public APIs work as documented
+        - E2E tests in cmd/ validate the complete application flow
+        - High coverage enables safe refactoring without breaking functionality
+
+        **What to test:**
+        - internal/: All core business logic, data structures, algorithms, validation
+        - pkg/: Public API functions, error handling, interface contracts
+        - cmd/: CLI flag parsing, command execution, basic end-to-end workflows
 structure:
   required_directories:
     cmd: Application entry points
@@ -55,7 +73,6 @@ rules:
       - errors
       - time
       - context
-      - gopkg.in/yaml.v3
     exclusion_patterns:
       - encoding/*
   test_files:
@@ -66,4 +83,11 @@ rules:
       - github.com/stretchr/testify/require
       - github.com/stretchr/testify/mock
     location: colocated
-    require_blackbox: false  # This project intentionally uses whitebox tests for internal packages
+    require_blackbox: true
+  test_coverage:
+    enabled: true
+    threshold: 70
+    package_thresholds:
+      cmd: 30
+      internal: 80
+      pkg: 70

@@ -21,6 +21,17 @@ type Config interface {
 	GetTestExemptImports() []string
 	GetTestFileLocation() string
 	ShouldRequireBlackboxTests() bool
+	IsCoverageEnabled() bool
+	GetCoverageThreshold() float64
+	GetPackageThresholds() map[string]float64
+	GetModule() string
+}
+
+// PackageCoverage interface for accessing package coverage information
+type PackageCoverage interface {
+	GetPackagePath() string
+	GetCoverage() float64
+	HasTests() bool
 }
 
 // Dependency interface for accessing dependency information
@@ -45,18 +56,19 @@ type Graph interface {
 type ViolationType string
 
 const (
-	ViolationPkgToPkg            ViolationType = "Forbidden pkg-to-pkg Dependency"
-	ViolationSkipLevel           ViolationType = "Skip-level Import"
-	ViolationCrossCmd            ViolationType = "Cross-cmd Dependency"
-	ViolationUnused              ViolationType = "Unused Package"
-	ViolationForbidden           ViolationType = "Forbidden Import"
-	ViolationMissingDirectory    ViolationType = "Missing Required Directory"
-	ViolationUnexpectedDirectory ViolationType = "Unexpected Directory"
-	ViolationEmptyDirectory      ViolationType = "Empty Required Directory"
-	ViolationUnusedDirectory     ViolationType = "Unused Required Directory"
+	ViolationPkgToPkg             ViolationType = "Forbidden pkg-to-pkg Dependency"
+	ViolationSkipLevel            ViolationType = "Skip-level Import"
+	ViolationCrossCmd             ViolationType = "Cross-cmd Dependency"
+	ViolationUnused               ViolationType = "Unused Package"
+	ViolationForbidden            ViolationType = "Forbidden Import"
+	ViolationMissingDirectory     ViolationType = "Missing Required Directory"
+	ViolationUnexpectedDirectory  ViolationType = "Unexpected Directory"
+	ViolationEmptyDirectory       ViolationType = "Empty Required Directory"
+	ViolationUnusedDirectory      ViolationType = "Unused Required Directory"
 	ViolationSharedExternalImport ViolationType = "Shared External Import"
 	ViolationTestFileLocation     ViolationType = "Test File Wrong Location"
 	ViolationWhiteboxTest         ViolationType = "Whitebox Test"
+	ViolationLowCoverage          ViolationType = "Insufficient Test Coverage"
 )
 
 type Violation struct {
@@ -99,9 +111,10 @@ func (v Violation) GetFix() string {
 }
 
 type Validator struct {
-	cfg         Config
-	graph       Graph
-	projectPath string
+	cfg              Config
+	graph            Graph
+	projectPath      string
+	coverageResults  []PackageCoverage
 }
 
 func New(cfg Config, g Graph) *Validator {
@@ -118,6 +131,11 @@ func NewWithPath(cfg Config, g Graph, projectPath string) *Validator {
 		graph:       g,
 		projectPath: projectPath,
 	}
+}
+
+// SetCoverageResults sets coverage results for validation
+func (v *Validator) SetCoverageResults(results []PackageCoverage) {
+	v.coverageResults = results
 }
 
 // Validate checks all rules and returns violations
@@ -152,6 +170,11 @@ func (v *Validator) Validate() []Violation {
 	// Check for whitebox tests (require blackbox tests)
 	if v.cfg.ShouldRequireBlackboxTests() {
 		violations = append(violations, v.validateBlackboxTests()...)
+	}
+
+	// Check test coverage
+	if v.cfg.IsCoverageEnabled() && len(v.coverageResults) > 0 {
+		violations = append(violations, v.validateCoverage()...)
 	}
 
 	return violations
@@ -852,4 +875,85 @@ After changing to blackbox testing:
 	}
 
 	return violations
+}
+
+// validateCoverage checks that test coverage meets configured thresholds
+func (v *Validator) validateCoverage() []Violation {
+	var violations []Violation
+
+	defaultThreshold := v.cfg.GetCoverageThreshold()
+	packageThresholds := v.cfg.GetPackageThresholds()
+	moduleName := v.cfg.GetModule()
+
+	for _, pkgCov := range v.coverageResults {
+		pkgPath := pkgCov.GetPackagePath()
+		coverage := pkgCov.GetCoverage()
+		hasTests := pkgCov.HasTests()
+
+		// Determine applicable threshold for this package (hierarchical)
+		threshold := getThresholdForPackage(pkgPath, moduleName, defaultThreshold, packageThresholds)
+
+		// Check if coverage is below threshold
+		if coverage < threshold {
+			var issue, fix string
+
+			if !hasTests {
+				issue = fmt.Sprintf("Package has no tests (0%% coverage, threshold: %.0f%%)", threshold)
+				fix = fmt.Sprintf(`Add test files for this package:
+1. Create %s_test.go files in the package directory
+2. Write tests for the exported API
+3. Run 'go test ./...' to verify`, pkgPath)
+			} else {
+				issue = fmt.Sprintf("Package coverage %.1f%% is below threshold %.0f%%", coverage, threshold)
+				fix = fmt.Sprintf(`Improve test coverage for this package:
+1. Run 'go test -cover %s' to see current coverage
+2. Run 'go test -coverprofile=coverage.out %s && go tool cover -html=coverage.out' to see detailed coverage
+3. Add tests for uncovered code paths
+4. Consider table-driven tests for better coverage`, pkgPath, pkgPath)
+			}
+
+			violations = append(violations, Violation{
+				Type:  ViolationLowCoverage,
+				File:  pkgPath,
+				Issue: issue,
+				Rule:  fmt.Sprintf("Minimum test coverage: %.0f%% (hierarchical threshold)", threshold),
+				Fix:   fix,
+			})
+		}
+	}
+
+	return violations
+}
+
+// getThresholdForPackage determines the applicable threshold for a package
+// using hierarchical inheritance (e.g., "cmd" applies to "cmd/foo/bar")
+// This duplicates logic from coverage.GetThresholdForPackage to maintain internal package isolation
+func getThresholdForPackage(pkgPath string, moduleName string, defaultThreshold float64, packageThresholds map[string]float64) float64 {
+	// Strip module prefix to get relative path
+	// e.g., "github.com/user/repo/cmd/foo" -> "cmd/foo"
+	relPath := pkgPath
+	if moduleName != "" && strings.HasPrefix(pkgPath, moduleName+"/") {
+		relPath = strings.TrimPrefix(pkgPath, moduleName+"/")
+	} else if moduleName != "" && pkgPath == moduleName {
+		// Package is the module root
+		relPath = "."
+	}
+
+	// Start with default
+	threshold := defaultThreshold
+
+	// Find the most specific matching threshold
+	// For package "cmd/foo/bar", check: "cmd/foo/bar", "cmd/foo", "cmd"
+	parts := strings.Split(relPath, "/")
+
+	// Check from most specific to least specific
+	for i := len(parts); i > 0; i-- {
+		prefix := strings.Join(parts[:i], "/")
+		if t, exists := packageThresholds[prefix]; exists {
+			threshold = t
+			break
+		}
+	}
+
+	return threshold
 }

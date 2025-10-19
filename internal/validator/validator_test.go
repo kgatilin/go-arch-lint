@@ -21,6 +21,9 @@ type testConfig struct {
 	testExemptImports                     []string
 	testFileLocation                      string
 	requireBlackboxTests                  bool
+	coverageEnabled                       bool
+	coverageThreshold                     float64
+	packageThresholds                     map[string]float64
 }
 
 func (tc *testConfig) GetDirectoriesImport() map[string][]string                 { return tc.directoriesImport }
@@ -35,6 +38,15 @@ func (tc *testConfig) ShouldLintTestFiles() bool                                
 func (tc *testConfig) GetTestExemptImports() []string                            { return tc.testExemptImports }
 func (tc *testConfig) GetTestFileLocation() string                               { return tc.testFileLocation }
 func (tc *testConfig) ShouldRequireBlackboxTests() bool                          { return tc.requireBlackboxTests }
+func (tc *testConfig) IsCoverageEnabled() bool                                   { return tc.coverageEnabled }
+func (tc *testConfig) GetCoverageThreshold() float64                             { return tc.coverageThreshold }
+func (tc *testConfig) GetPackageThresholds() map[string]float64 {
+	if tc.packageThresholds == nil {
+		return make(map[string]float64)
+	}
+	return tc.packageThresholds
+}
+func (tc *testConfig) GetModule() string { return tc.module }
 
 type testDependency struct {
 	importPath string
