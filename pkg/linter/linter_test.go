@@ -1332,6 +1332,300 @@ func TestLoad(t *testing.T) {
 }
 
 // TestPresets_RequireBlackboxDefault verifies all presets have require_blackbox enabled by default
+func TestAvailablePresets(t *testing.T) {
+	presets := linter.AvailablePresets()
+
+	if len(presets) == 0 {
+		t.Fatal("expected at least one preset")
+	}
+
+	// Check that ddd preset exists
+	foundDDD := false
+	for _, p := range presets {
+		if p.Name == "ddd" {
+			foundDDD = true
+			if p.Description == "" {
+				t.Error("ddd preset missing description")
+			}
+			if p.ArchitecturalGoals == "" {
+				t.Error("ddd preset missing architectural goals")
+			}
+			if len(p.Principles) == 0 {
+				t.Error("ddd preset missing principles")
+			}
+		}
+	}
+
+	if !foundDDD {
+		t.Error("expected ddd preset to be available")
+	}
+}
+
+func TestGetPreset_ValidPreset(t *testing.T) {
+	preset, err := linter.GetPreset("ddd")
+	if err != nil {
+		t.Fatalf("GetPreset('ddd') failed: %v", err)
+	}
+
+	if preset.Name != "ddd" {
+		t.Errorf("expected preset name 'ddd', got '%s'", preset.Name)
+	}
+
+	if preset.Description == "" {
+		t.Error("preset missing description")
+	}
+
+	if len(preset.Config.Structure.RequiredDirectories) == 0 {
+		t.Error("preset missing required directories")
+	}
+
+	if len(preset.Config.Rules.DirectoriesImport) == 0 {
+		t.Error("preset missing import rules")
+	}
+}
+
+func TestGetPreset_InvalidPreset(t *testing.T) {
+	_, err := linter.GetPreset("nonexistent")
+	if err == nil {
+		t.Error("expected error for nonexistent preset")
+	}
+}
+
+func TestInit_WithDDDPreset(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Initialize with ddd preset
+	err := linter.Init(tmpDir, "ddd", true)
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Check .goarchlint was created
+	configPath := filepath.Join(tmpDir, ".goarchlint")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Fatal(".goarchlint file was not created")
+	}
+
+	// Read and verify config
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := string(data)
+
+	// Check for required directories from ddd preset
+	if !strings.Contains(content, "internal/domain") {
+		t.Error("config missing internal/domain directory")
+	}
+	if !strings.Contains(content, "internal/app") {
+		t.Error("config missing internal/app directory")
+	}
+	if !strings.Contains(content, "internal/infra") {
+		t.Error("config missing internal/infra directory")
+	}
+
+	// Check for error_prompt section
+	if !strings.Contains(content, "error_prompt:") {
+		t.Error("config missing error_prompt section")
+	}
+	if !strings.Contains(content, "architectural_goals:") {
+		t.Error("config missing architectural_goals")
+	}
+
+	// Check that required directories were created (createDirs=true)
+	for _, dir := range []string{"internal/domain", "internal/app", "internal/infra", "cmd"} {
+		dirPath := filepath.Join(tmpDir, dir)
+		if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+			t.Errorf("directory %s was not created", dir)
+		}
+	}
+}
+
+func TestInit_WithSimplePreset(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Initialize with simple preset
+	err := linter.Init(tmpDir, "simple", false)
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Check .goarchlint was created
+	configPath := filepath.Join(tmpDir, ".goarchlint")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Fatal(".goarchlint file was not created")
+	}
+
+	// With createDirs=false, directories should NOT be created
+	cmdPath := filepath.Join(tmpDir, "cmd")
+	if _, err := os.Stat(cmdPath); err == nil {
+		t.Error("directories should not be created when createDirs=false")
+	}
+}
+
+func TestInit_InvalidPreset(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := linter.Init(tmpDir, "invalid-preset", false)
+	if err == nil {
+		t.Error("expected error for invalid preset")
+	}
+}
+
+func TestInit_ConfigAlreadyExists(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create existing config
+	existingConfig := `rules:
+  directories_import:
+    cmd: [pkg]
+`
+	configPath := filepath.Join(tmpDir, ".goarchlint")
+	if err := os.WriteFile(configPath, []byte(existingConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to init - should fail
+	err := linter.Init(tmpDir, "ddd", false)
+	if err == nil {
+		t.Error("expected error when .goarchlint already exists")
+	}
+}
+
+func TestRefresh_WithSamePreset(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// First initialize with ddd preset
+	if err := linter.Init(tmpDir, "ddd", false); err != nil {
+		t.Fatal(err)
+	}
+
+	// Modify the config to add custom rule
+	configPath := filepath.Join(tmpDir, ".goarchlint")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Add a comment to verify it's preserved
+	modifiedConfig := "# Custom comment\n" + string(data)
+	if err := os.WriteFile(configPath, []byte(modifiedConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Refresh with same preset (empty string means use current)
+	if err := linter.Refresh(tmpDir, ""); err != nil {
+		t.Fatalf("Refresh failed: %v", err)
+	}
+
+	// Read refreshed config
+	refreshedData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	refreshedContent := string(refreshedData)
+
+	// Should still have error_prompt section
+	if !strings.Contains(refreshedContent, "error_prompt:") {
+		t.Error("refreshed config missing error_prompt section")
+	}
+
+	// Should still have architectural_goals
+	if !strings.Contains(refreshedContent, "architectural_goals:") {
+		t.Error("refreshed config missing architectural_goals")
+	}
+}
+
+func TestRefresh_SwitchToNewPreset(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Initialize with simple preset
+	if err := linter.Init(tmpDir, "simple", false); err != nil {
+		t.Fatal(err)
+	}
+
+	// Refresh with ddd preset (switch)
+	if err := linter.Refresh(tmpDir, "ddd"); err != nil {
+		t.Fatalf("Refresh failed: %v", err)
+	}
+
+	// Read config
+	configPath := filepath.Join(tmpDir, ".goarchlint")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := string(data)
+
+	// Should now have DDD-specific content
+	if !strings.Contains(content, "preset_used: ddd") {
+		t.Error("config should indicate ddd preset")
+	}
+
+	// Should have error_prompt from ddd
+	if !strings.Contains(content, "error_prompt:") {
+		t.Error("config missing error_prompt after switching preset")
+	}
+}
+
+func TestRefresh_NoConfigExists(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Try to refresh without existing config - should fail
+	err := linter.Refresh(tmpDir, "ddd")
+	if err == nil {
+		t.Error("expected error when refreshing without existing config")
+	}
+}
+
 func TestPresets_RequireBlackboxDefault(t *testing.T) {
 	presets := linter.AvailablePresets()
 

@@ -1,8 +1,10 @@
-package validator
+package validator_test
 
 import (
 	"strings"
 	"testing"
+
+	"github.com/kgatilin/go-arch-lint/internal/validator"
 )
 
 // Test structs that implement validator interfaces for testing
@@ -61,33 +63,43 @@ func (td *testDependency) IsLocalDep() bool      { return td.isLocal }
 type testFileNode struct {
 	relPath      string
 	pkg          string
-	dependencies []Dependency
+	dependencies []validator.Dependency
 }
 
-func (tfn *testFileNode) GetRelPath() string           { return tfn.relPath }
-func (tfn *testFileNode) GetPackage() string           { return tfn.pkg }
-func (tfn *testFileNode) GetDependencies() []Dependency { return tfn.dependencies }
+func (tfn *testFileNode) GetRelPath() string                      { return tfn.relPath }
+func (tfn *testFileNode) GetPackage() string                      { return tfn.pkg }
+func (tfn *testFileNode) GetDependencies() []validator.Dependency { return tfn.dependencies }
 
 type testGraph struct {
-	nodes []FileNode
+	nodes []validator.FileNode
 }
 
-func (tg *testGraph) GetNodes() []FileNode { return tg.nodes }
+func (tg *testGraph) GetNodes() []validator.FileNode { return tg.nodes }
+
+type testPackageCoverage struct {
+	packagePath string
+	coverage    float64
+	hasTests    bool
+}
+
+func (tpc *testPackageCoverage) GetPackagePath() string { return tpc.packagePath }
+func (tpc *testPackageCoverage) GetCoverage() float64   { return tpc.coverage }
+func (tpc *testPackageCoverage) HasTests() bool         { return tpc.hasTests }
 
 func TestValidate_PkgToPkgViolation(t *testing.T) {
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "pkg/http/server.go",
 				pkg:     "http",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/pkg/database", localPath: "pkg/database", isLocal: true},
 				},
 			},
 			&testFileNode{
 				relPath:      "pkg/database/db.go",
 				pkg:          "database",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -100,7 +112,7 @@ func TestValidate_PkgToPkgViolation(t *testing.T) {
 		detectUnused: false,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	if len(violations) == 0 {
@@ -109,7 +121,7 @@ func TestValidate_PkgToPkgViolation(t *testing.T) {
 
 	found := false
 	for _, viol := range violations {
-		if viol.Type == ViolationPkgToPkg {
+		if viol.Type == validator.ViolationPkgToPkg {
 			found = true
 			break
 		}
@@ -122,18 +134,18 @@ func TestValidate_PkgToPkgViolation(t *testing.T) {
 
 func TestValidate_CrossCmdViolation(t *testing.T) {
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "cmd/api/main.go",
 				pkg:     "main",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/cmd/worker", localPath: "cmd/worker", isLocal: true},
 				},
 			},
 			&testFileNode{
 				relPath:      "cmd/worker/worker.go",
 				pkg:          "worker",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -146,7 +158,7 @@ func TestValidate_CrossCmdViolation(t *testing.T) {
 		detectUnused: false,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	if len(violations) == 0 {
@@ -155,7 +167,7 @@ func TestValidate_CrossCmdViolation(t *testing.T) {
 
 	found := false
 	for _, viol := range violations {
-		if viol.Type == ViolationCrossCmd {
+		if viol.Type == validator.ViolationCrossCmd {
 			found = true
 			break
 		}
@@ -168,18 +180,18 @@ func TestValidate_CrossCmdViolation(t *testing.T) {
 
 func TestValidate_SkipLevelImport(t *testing.T) {
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "pkg/orders/service.go",
 				pkg:     "orders",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/pkg/orders/models/entities", localPath: "pkg/orders/models/entities", isLocal: true},
 				},
 			},
 			&testFileNode{
 				relPath:      "pkg/orders/models/entities/order.go",
 				pkg:          "entities",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -192,7 +204,7 @@ func TestValidate_SkipLevelImport(t *testing.T) {
 		detectUnused: false,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	if len(violations) == 0 {
@@ -201,7 +213,7 @@ func TestValidate_SkipLevelImport(t *testing.T) {
 
 	found := false
 	for _, viol := range violations {
-		if viol.Type == ViolationSkipLevel {
+		if viol.Type == validator.ViolationSkipLevel {
 			found = true
 			break
 		}
@@ -214,18 +226,18 @@ func TestValidate_SkipLevelImport(t *testing.T) {
 
 func TestValidate_DirectSubpackageAllowed(t *testing.T) {
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "pkg/orders/service.go",
 				pkg:     "orders",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/pkg/orders/models", localPath: "pkg/orders/models", isLocal: true},
 				},
 			},
 			&testFileNode{
 				relPath:      "pkg/orders/models/order.go",
 				pkg:          "models",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -238,12 +250,12 @@ func TestValidate_DirectSubpackageAllowed(t *testing.T) {
 		detectUnused: false,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should not have pkg-to-pkg violation for direct subpackage
 	for _, viol := range violations {
-		if viol.Type == ViolationPkgToPkg || viol.Type == ViolationSkipLevel {
+		if viol.Type == validator.ViolationPkgToPkg || viol.Type == validator.ViolationSkipLevel {
 			t.Errorf("unexpected violation: %v", viol.Type)
 		}
 	}
@@ -251,23 +263,23 @@ func TestValidate_DirectSubpackageAllowed(t *testing.T) {
 
 func TestValidate_UnusedPackage(t *testing.T) {
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "cmd/api/main.go",
 				pkg:     "main",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/pkg/used", localPath: "pkg/used", isLocal: true},
 				},
 			},
 			&testFileNode{
 				relPath:      "pkg/used/service.go",
 				pkg:          "used",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "pkg/unused/service.go",
 				pkg:          "unused",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -280,12 +292,12 @@ func TestValidate_UnusedPackage(t *testing.T) {
 		detectUnused: true,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	found := false
 	for _, viol := range violations {
-		if viol.Type == ViolationUnused {
+		if viol.Type == validator.ViolationUnused {
 			found = true
 			if viol.Issue == "" {
 				t.Error("expected issue description")
@@ -302,18 +314,18 @@ func TestValidate_UnusedPackage(t *testing.T) {
 func TestValidate_InternalToInternalViolation(t *testing.T) {
 	// Regression test for bug where internal: [] did not catch internal-to-internal imports
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "internal/output/markdown.go",
 				pkg:     "output",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/internal/graph", localPath: "internal/graph", isLocal: true},
 				},
 			},
 			&testFileNode{
 				relPath:      "internal/graph/graph.go",
 				pkg:          "graph",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -328,7 +340,7 @@ func TestValidate_InternalToInternalViolation(t *testing.T) {
 		detectUnused: false,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	if len(violations) == 0 {
@@ -337,7 +349,7 @@ func TestValidate_InternalToInternalViolation(t *testing.T) {
 
 	found := false
 	for _, viol := range violations {
-		if viol.Type == ViolationForbidden && viol.File == "internal/output/markdown.go" {
+		if viol.Type == validator.ViolationForbidden && viol.File == "internal/output/markdown.go" {
 			found = true
 			if viol.Rule != "internal can only import from: []" {
 				t.Errorf("expected rule 'internal can only import from: []', got %q", viol.Rule)
@@ -359,11 +371,11 @@ func TestValidate_InternalToInternalViolation(t *testing.T) {
 
 func TestValidate_NoViolations(t *testing.T) {
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "cmd/api/main.go",
 				pkg:     "main",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/pkg/service", localPath: "pkg/service", isLocal: true},
 					&testDependency{importPath: "github.com/test/project/internal/config", localPath: "internal/config", isLocal: true},
 				},
@@ -371,19 +383,19 @@ func TestValidate_NoViolations(t *testing.T) {
 			&testFileNode{
 				relPath: "pkg/service/service.go",
 				pkg:     "service",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/internal/types", localPath: "internal/types", isLocal: true},
 				},
 			},
 			&testFileNode{
 				relPath:      "internal/config/config.go",
 				pkg:          "config",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "internal/types/types.go",
 				pkg:          "types",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -398,7 +410,7 @@ func TestValidate_NoViolations(t *testing.T) {
 		detectUnused: true,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	if len(violations) != 0 {
@@ -412,11 +424,11 @@ func TestValidate_NoViolations(t *testing.T) {
 func TestValidate_SubdirectorySpecificRule(t *testing.T) {
 	// Regression test for bug where subdirectory-specific rules (cmd/dw) were ignored
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "cmd/dw/claude.go",
 				pkg:     "main",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/internal/app", localPath: "internal/app", isLocal: true},
 					&testDependency{importPath: "github.com/test/project/internal/infra", localPath: "internal/infra", isLocal: true},
 				},
@@ -424,28 +436,28 @@ func TestValidate_SubdirectorySpecificRule(t *testing.T) {
 			&testFileNode{
 				relPath: "cmd/dw/logs.go",
 				pkg:     "main",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/internal/app", localPath: "internal/app", isLocal: true},
 				},
 			},
 			&testFileNode{
 				relPath: "internal/app/app.go",
 				pkg:     "app",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/internal/domain", localPath: "internal/domain", isLocal: true},
 				},
 			},
 			&testFileNode{
 				relPath: "internal/infra/db.go",
 				pkg:     "infra",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/internal/domain", localPath: "internal/domain", isLocal: true},
 				},
 			},
 			&testFileNode{
 				relPath:      "internal/domain/user.go",
 				pkg:          "domain",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -462,15 +474,15 @@ func TestValidate_SubdirectorySpecificRule(t *testing.T) {
 		detectUnused: false,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should not have any violations - the subdirectory-specific rule should allow these imports
 	for _, viol := range violations {
-		if viol.Type == ViolationForbidden && viol.File == "cmd/dw/claude.go" {
+		if viol.Type == validator.ViolationForbidden && viol.File == "cmd/dw/claude.go" {
 			t.Errorf("unexpected ViolationForbidden for cmd/dw/claude.go: %s", viol.Issue)
 		}
-		if viol.Type == ViolationForbidden && viol.File == "cmd/dw/logs.go" {
+		if viol.Type == validator.ViolationForbidden && viol.File == "cmd/dw/logs.go" {
 			t.Errorf("unexpected ViolationForbidden for cmd/dw/logs.go: %s", viol.Issue)
 		}
 	}
@@ -486,11 +498,11 @@ func TestValidate_SubdirectorySpecificRule(t *testing.T) {
 func TestValidate_PrefixMatchingForAllowedImports(t *testing.T) {
 	// Test that if "internal/app" is allowed, then "internal/app/user" is also allowed
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "cmd/api/main.go",
 				pkg:     "main",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/internal/app/user", localPath: "internal/app/user", isLocal: true},
 					&testDependency{importPath: "github.com/test/project/internal/infra/database", localPath: "internal/infra/database", isLocal: true},
 				},
@@ -498,12 +510,12 @@ func TestValidate_PrefixMatchingForAllowedImports(t *testing.T) {
 			&testFileNode{
 				relPath:      "internal/app/user/service.go",
 				pkg:          "user",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "internal/infra/database/conn.go",
 				pkg:          "database",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -516,12 +528,12 @@ func TestValidate_PrefixMatchingForAllowedImports(t *testing.T) {
 		detectUnused: false,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should not have any violations - prefix matching should allow these imports
 	for _, viol := range violations {
-		if viol.Type == ViolationForbidden {
+		if viol.Type == validator.ViolationForbidden {
 			t.Errorf("unexpected ViolationForbidden: %s - %s", viol.File, viol.Issue)
 		}
 	}
@@ -530,18 +542,18 @@ func TestValidate_PrefixMatchingForAllowedImports(t *testing.T) {
 func TestValidate_ForbiddenImportNotInAllowedList(t *testing.T) {
 	// Ensure that imports NOT in the allowed list are still caught
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "cmd/api/main.go",
 				pkg:     "main",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/internal/forbidden", localPath: "internal/forbidden", isLocal: true},
 				},
 			},
 			&testFileNode{
 				relPath:      "internal/forbidden/service.go",
 				pkg:          "forbidden",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -554,12 +566,12 @@ func TestValidate_ForbiddenImportNotInAllowedList(t *testing.T) {
 		detectUnused: false,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	found := false
 	for _, viol := range violations {
-		if viol.Type == ViolationForbidden && viol.File == "cmd/api/main.go" {
+		if viol.Type == validator.ViolationForbidden && viol.File == "cmd/api/main.go" {
 			found = true
 			if viol.Rule != "cmd can only import from: [internal/app internal/infra]" {
 				t.Errorf("expected specific rule message, got %q", viol.Rule)
@@ -576,11 +588,11 @@ func TestValidate_ForbiddenImportNotInAllowedList(t *testing.T) {
 func TestDetectSharedExternalImports_MultipleLayersImportSamePackage(t *testing.T) {
 	// Create graph with cmd and internal both importing github.com/pkg/errors (external non-stdlib)
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "cmd/main.go",
 				pkg:     "main",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/pkg/errors", isLocal: false},
 					&testDependency{importPath: "fmt", isLocal: false},
 				},
@@ -588,7 +600,7 @@ func TestDetectSharedExternalImports_MultipleLayersImportSamePackage(t *testing.
 			&testFileNode{
 				relPath: "internal/repo.go",
 				pkg:     "repo",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/pkg/errors", isLocal: false},
 				},
 			},
@@ -605,13 +617,13 @@ func TestDetectSharedExternalImports_MultipleLayersImportSamePackage(t *testing.
 		sharedExternalImportsMode:   "error",
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should have exactly 1 violation for github.com/pkg/errors
 	found := false
 	for _, viol := range violations {
-		if viol.Type == ViolationSharedExternalImport && strings.Contains(viol.Issue, "github.com/pkg/errors") {
+		if viol.Type == validator.ViolationSharedExternalImport && strings.Contains(viol.Issue, "github.com/pkg/errors") {
 			found = true
 			// Verify violation details
 			if !strings.Contains(viol.Issue, "2 layers") {
@@ -628,18 +640,18 @@ func TestDetectSharedExternalImports_MultipleLayersImportSamePackage(t *testing.
 func TestDetectSharedExternalImports_ExactExclusion(t *testing.T) {
 	// Create graph with cmd and internal both importing github.com/pkg/errors (excluded)
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "cmd/main.go",
 				pkg:     "main",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/pkg/errors", isLocal: false},
 				},
 			},
 			&testFileNode{
 				relPath: "internal/repo.go",
 				pkg:     "repo",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/pkg/errors", isLocal: false},
 				},
 			},
@@ -657,12 +669,12 @@ func TestDetectSharedExternalImports_ExactExclusion(t *testing.T) {
 		sharedExternalImportsExclusions:    []string{"fmt", "github.com/pkg/errors"},
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should NOT have violation for github.com/pkg/errors (it's excluded)
 	for _, viol := range violations {
-		if viol.Type == ViolationSharedExternalImport && strings.Contains(viol.Issue, "github.com/pkg/errors") {
+		if viol.Type == validator.ViolationSharedExternalImport && strings.Contains(viol.Issue, "github.com/pkg/errors") {
 			t.Error("Expected no violation for github.com/pkg/errors (excluded)")
 		}
 	}
@@ -671,18 +683,18 @@ func TestDetectSharedExternalImports_ExactExclusion(t *testing.T) {
 func TestDetectSharedExternalImports_GlobExclusion(t *testing.T) {
 	// Create graph with cmd and internal both importing encoding/json (should be excluded)
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "cmd/main.go",
 				pkg:     "main",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "encoding/json", isLocal: false},
 				},
 			},
 			&testFileNode{
 				relPath: "internal/repo.go",
 				pkg:     "repo",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "encoding/json", isLocal: false},
 				},
 			},
@@ -700,12 +712,12 @@ func TestDetectSharedExternalImports_GlobExclusion(t *testing.T) {
 		sharedExternalImportsExclusionPatterns:    []string{"encoding/*"},
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should NOT have violation for encoding/json (matches pattern)
 	for _, viol := range violations {
-		if viol.Type == ViolationSharedExternalImport && strings.Contains(viol.Issue, "encoding/json") {
+		if viol.Type == validator.ViolationSharedExternalImport && strings.Contains(viol.Issue, "encoding/json") {
 			t.Error("Expected no violation for encoding/json (matches encoding/* pattern)")
 		}
 	}
@@ -714,18 +726,18 @@ func TestDetectSharedExternalImports_GlobExclusion(t *testing.T) {
 func TestDetectSharedExternalImports_SingleLayerNoViolation(t *testing.T) {
 	// Create graph with multiple files in same layer (internal) importing same package
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath: "internal/repo.go",
 				pkg:     "repo",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/pkg/errors", isLocal: false},
 				},
 			},
 			&testFileNode{
 				relPath: "internal/store.go",
 				pkg:     "store",
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/pkg/errors", isLocal: false},
 				},
 			},
@@ -742,12 +754,12 @@ func TestDetectSharedExternalImports_SingleLayerNoViolation(t *testing.T) {
 		sharedExternalImportsMode:   "error",
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should NOT have violation (same layer is OK)
 	for _, viol := range violations {
-		if viol.Type == ViolationSharedExternalImport {
+		if viol.Type == validator.ViolationSharedExternalImport {
 			t.Errorf("Expected no shared external import violations, got: %v", viol)
 		}
 	}
@@ -757,16 +769,16 @@ func TestDetectSharedExternalImports_SingleLayerNoViolation(t *testing.T) {
 func TestBlackBoxTest_ParentPackageImport(t *testing.T) {
 	// Black-box test file importing its parent package
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath:      "internal/app/analysis.go",
 				pkg:          "app",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath: "internal/app/analysis_test.go",
 				pkg:     "app_test", // Black-box test (package name ends with _test)
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/internal/app", localPath: "internal/app", isLocal: true},
 				},
 			},
@@ -782,7 +794,7 @@ func TestBlackBoxTest_ParentPackageImport(t *testing.T) {
 		lintTestFiles: true,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should NOT have any violations - black-box tests are allowed to import parent package
@@ -798,23 +810,23 @@ func TestBlackBoxTest_ParentPackageImport(t *testing.T) {
 func TestWhiteBoxTest_NormalRules(t *testing.T) {
 	// White-box test file (same package name, not ending with _test)
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath:      "internal/app/analysis.go",
 				pkg:          "app",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath: "internal/app/analysis_test.go",
 				pkg:     "app", // White-box test (same package, no _test suffix)
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/internal/config", localPath: "internal/config", isLocal: true},
 				},
 			},
 			&testFileNode{
 				relPath:      "internal/config/config.go",
 				pkg:          "config",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -828,7 +840,7 @@ func TestWhiteBoxTest_NormalRules(t *testing.T) {
 		lintTestFiles: true,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should HAVE violations - white-box tests follow normal rules
@@ -838,7 +850,7 @@ func TestWhiteBoxTest_NormalRules(t *testing.T) {
 
 	found := false
 	for _, viol := range violations {
-		if viol.Type == ViolationForbidden && strings.Contains(viol.File, "analysis_test.go") {
+		if viol.Type == validator.ViolationForbidden && strings.Contains(viol.File, "analysis_test.go") {
 			found = true
 			break
 		}
@@ -853,16 +865,16 @@ func TestWhiteBoxTest_NormalRules(t *testing.T) {
 func TestBlackBoxTest_OtherImportsFollowNormalRules(t *testing.T) {
 	// Black-box test importing both parent package (exempted) and another internal package (subject to normal rules)
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath:      "internal/app/analysis.go",
 				pkg:          "app",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath: "internal/app/analysis_test.go",
 				pkg:     "app_test", // Black-box test
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/internal/app", localPath: "internal/app", isLocal: true},       // Parent package - exempted
 					&testDependency{importPath: "github.com/test/project/internal/config", localPath: "internal/config", isLocal: true}, // Other internal package - follows normal rules (forbidden by internal:[])
 				},
@@ -870,7 +882,7 @@ func TestBlackBoxTest_OtherImportsFollowNormalRules(t *testing.T) {
 			&testFileNode{
 				relPath:      "internal/config/config.go",
 				pkg:          "config",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -884,7 +896,7 @@ func TestBlackBoxTest_OtherImportsFollowNormalRules(t *testing.T) {
 		lintTestFiles: true,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should have ViolationForbidden for importing internal/config (normal architecture rule)
@@ -898,7 +910,7 @@ func TestBlackBoxTest_OtherImportsFollowNormalRules(t *testing.T) {
 	for _, viol := range violations {
 		if strings.Contains(viol.File, "analysis_test.go") {
 			// Check for forbidden import violation about importing config
-			if viol.Type == ViolationForbidden && strings.Contains(viol.Issue, "internal/config") {
+			if viol.Type == validator.ViolationForbidden && strings.Contains(viol.Issue, "internal/config") {
 				foundConfigViolation = true
 			}
 			// Check if there's a violation where internal/app is the TARGET of the import
@@ -921,16 +933,16 @@ func TestBlackBoxTest_OtherImportsFollowNormalRules(t *testing.T) {
 func TestBlackBoxTest_InPkgLayer(t *testing.T) {
 	// Black-box test in pkg layer importing parent package
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath:      "pkg/linter/linter.go",
 				pkg:          "linter",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath: "pkg/linter/linter_test.go",
 				pkg:     "linter_test", // Black-box test
-				dependencies: []Dependency{
+				dependencies: []validator.Dependency{
 					&testDependency{importPath: "github.com/test/project/pkg/linter", localPath: "pkg/linter", isLocal: true},
 				},
 			},
@@ -946,7 +958,7 @@ func TestBlackBoxTest_InPkgLayer(t *testing.T) {
 		lintTestFiles: true,
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should NOT have violations - black-box tests can import parent package
@@ -958,116 +970,27 @@ func TestBlackBoxTest_InPkgLayer(t *testing.T) {
 	}
 }
 
-// TestIsBlackBoxTest tests the isBlackBoxTest helper function
-func TestIsBlackBoxTest(t *testing.T) {
-	cfg := &testConfig{}
-	v := New(cfg, &testGraph{})
-
-	tests := []struct {
-		name        string
-		relPath     string
-		packageName string
-		want        bool
-	}{
-		{
-			name:        "black-box test",
-			relPath:     "internal/app/analysis_test.go",
-			packageName: "app_test",
-			want:        true,
-		},
-		{
-			name:        "white-box test",
-			relPath:     "internal/app/analysis_test.go",
-			packageName: "app",
-			want:        false,
-		},
-		{
-			name:        "non-test file with _test package",
-			relPath:     "internal/app/analysis.go",
-			packageName: "app_test",
-			want:        false,
-		},
-		{
-			name:        "non-test file",
-			relPath:     "internal/app/analysis.go",
-			packageName: "app",
-			want:        false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			node := &testFileNode{
-				relPath: tt.relPath,
-				pkg:     tt.packageName,
-			}
-			got := v.isBlackBoxTest(node)
-			if got != tt.want {
-				t.Errorf("isBlackBoxTest() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestIsParentPackageImport tests the isParentPackageImport helper function
-func TestIsParentPackageImport(t *testing.T) {
-	cfg := &testConfig{}
-	v := New(cfg, &testGraph{})
-
-	tests := []struct {
-		name       string
-		fileDir    string
-		importPath string
-		want       bool
-	}{
-		{
-			name:       "parent package import",
-			fileDir:    "internal/app",
-			importPath: "internal/app",
-			want:       true,
-		},
-		{
-			name:       "non-parent import",
-			fileDir:    "internal/app",
-			importPath: "internal/config",
-			want:       false,
-		},
-		{
-			name:       "nested package import",
-			fileDir:    "internal/app",
-			importPath: "internal/app/models",
-			want:       false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := v.isParentPackageImport(tt.fileDir, tt.importPath)
-			if got != tt.want {
-				t.Errorf("isParentPackageImport() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
+// Blackbox tests only test exported API
+// Tests for internal helper functions (isBlackBoxTest, isParentPackageImport) have been removed
 
 // TestValidateTestFileLocations_Colocated tests that colocated policy requires tests next to code
 func TestValidateTestFileLocations_Colocated(t *testing.T) {
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath:      "internal/app/app.go",
 				pkg:          "app",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "internal/app/app_test.go", // ✓ Colocated - OK
 				pkg:          "app",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "tests/internal/config/config_test.go", // ✗ In tests/ directory - violation
 				pkg:          "config",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -1078,13 +1001,13 @@ func TestValidateTestFileLocations_Colocated(t *testing.T) {
 		testFileLocation: "colocated", // Tests must be next to code
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should have violation for test in tests/ directory
 	foundViolation := false
 	for _, viol := range violations {
-		if viol.Type == ViolationTestFileLocation && strings.Contains(viol.File, "tests/") {
+		if viol.Type == validator.ViolationTestFileLocation && strings.Contains(viol.File, "tests/") {
 			foundViolation = true
 			break
 		}
@@ -1096,7 +1019,7 @@ func TestValidateTestFileLocations_Colocated(t *testing.T) {
 
 	// Should NOT have violation for colocated test
 	for _, viol := range violations {
-		if viol.Type == ViolationTestFileLocation && strings.Contains(viol.File, "internal/app/app_test.go") {
+		if viol.Type == validator.ViolationTestFileLocation && strings.Contains(viol.File, "internal/app/app_test.go") {
 			t.Error("Did not expect violation for colocated test file")
 		}
 	}
@@ -1105,21 +1028,21 @@ func TestValidateTestFileLocations_Colocated(t *testing.T) {
 // TestValidateTestFileLocations_Separate tests that separate policy requires tests in tests/ directory
 func TestValidateTestFileLocations_Separate(t *testing.T) {
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath:      "internal/app/app.go",
 				pkg:          "app",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "internal/app/app_test.go", // ✗ Colocated - violation
 				pkg:          "app",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "tests/internal/config/config_test.go", // ✓ In tests/ directory - OK
 				pkg:          "config",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -1130,13 +1053,13 @@ func TestValidateTestFileLocations_Separate(t *testing.T) {
 		testFileLocation: "separate", // Tests must be in tests/ directory
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should have violation for colocated test
 	foundViolation := false
 	for _, viol := range violations {
-		if viol.Type == ViolationTestFileLocation && strings.Contains(viol.File, "internal/app/app_test.go") {
+		if viol.Type == validator.ViolationTestFileLocation && strings.Contains(viol.File, "internal/app/app_test.go") {
 			foundViolation = true
 			break
 		}
@@ -1148,7 +1071,7 @@ func TestValidateTestFileLocations_Separate(t *testing.T) {
 
 	// Should NOT have violation for test in tests/ directory
 	for _, viol := range violations {
-		if viol.Type == ViolationTestFileLocation && strings.Contains(viol.File, "tests/") {
+		if viol.Type == validator.ViolationTestFileLocation && strings.Contains(viol.File, "tests/") {
 			t.Error("Did not expect violation for test file in tests/ directory")
 		}
 	}
@@ -1157,21 +1080,21 @@ func TestValidateTestFileLocations_Separate(t *testing.T) {
 // TestValidateTestFileLocations_Any tests that "any" policy allows tests anywhere
 func TestValidateTestFileLocations_Any(t *testing.T) {
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath:      "internal/app/app.go",
 				pkg:          "app",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "internal/app/app_test.go", // ✓ Colocated - OK
 				pkg:          "app",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "tests/internal/config/config_test.go", // ✓ In tests/ - OK
 				pkg:          "config",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -1182,12 +1105,12 @@ func TestValidateTestFileLocations_Any(t *testing.T) {
 		testFileLocation: "any", // Tests can be anywhere
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should NOT have any test location violations
 	for _, viol := range violations {
-		if viol.Type == ViolationTestFileLocation {
+		if viol.Type == validator.ViolationTestFileLocation {
 			t.Errorf("Did not expect ViolationTestFileLocation with 'any' policy, got: %v", viol)
 		}
 	}
@@ -1196,21 +1119,21 @@ func TestValidateTestFileLocations_Any(t *testing.T) {
 // TestValidateBlackboxTests_WhiteboxDetected tests that whitebox tests are detected
 func TestValidateBlackboxTests_WhiteboxDetected(t *testing.T) {
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath:      "internal/app/app.go",
 				pkg:          "app",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "internal/app/app_test.go", // Whitebox test
 				pkg:          "app",                      // Should be "app_test"
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "pkg/database/db_test.go", // Whitebox test
 				pkg:          "database",                // Should be "database_test"
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -1220,13 +1143,13 @@ func TestValidateBlackboxTests_WhiteboxDetected(t *testing.T) {
 		requireBlackboxTests: true, // Enable blackbox test requirement
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should have 2 whitebox test violations
 	whiteboxViolations := 0
 	for _, viol := range violations {
-		if viol.Type == ViolationWhiteboxTest {
+		if viol.Type == validator.ViolationWhiteboxTest {
 			whiteboxViolations++
 		}
 	}
@@ -1239,7 +1162,7 @@ func TestValidateBlackboxTests_WhiteboxDetected(t *testing.T) {
 	foundAppViolation := false
 	foundDbViolation := false
 	for _, viol := range violations {
-		if viol.Type == ViolationWhiteboxTest {
+		if viol.Type == validator.ViolationWhiteboxTest {
 			if strings.Contains(viol.File, "internal/app/app_test.go") {
 				foundAppViolation = true
 				if !strings.Contains(viol.Issue, "package app instead of app_test") {
@@ -1264,7 +1187,7 @@ func TestValidateBlackboxTests_WhiteboxDetected(t *testing.T) {
 
 	// Verify violations are concise (educational content is in separate guidance section)
 	for _, viol := range violations {
-		if viol.Type == ViolationWhiteboxTest {
+		if viol.Type == validator.ViolationWhiteboxTest {
 			// Check that Rule is concise
 			if !strings.Contains(viol.Rule, "Blackbox testing is enforced") {
 				t.Errorf("Expected Rule to mention blackbox testing requirement, got: %s", viol.Rule)
@@ -1291,21 +1214,21 @@ func TestValidateBlackboxTests_WhiteboxDetected(t *testing.T) {
 // TestValidateBlackboxTests_BlackboxAllowed tests that blackbox tests are allowed
 func TestValidateBlackboxTests_BlackboxAllowed(t *testing.T) {
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath:      "internal/app/app.go",
 				pkg:          "app",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "internal/app/app_test.go", // Blackbox test
 				pkg:          "app_test",                 // Correctly uses _test suffix
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "pkg/database/db_test.go", // Blackbox test
 				pkg:          "database_test",           // Correctly uses _test suffix
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -1315,12 +1238,12 @@ func TestValidateBlackboxTests_BlackboxAllowed(t *testing.T) {
 		requireBlackboxTests: true, // Enable blackbox test requirement
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should NOT have any whitebox test violations
 	for _, viol := range violations {
-		if viol.Type == ViolationWhiteboxTest {
+		if viol.Type == validator.ViolationWhiteboxTest {
 			t.Errorf("Did not expect ViolationWhiteboxTest for blackbox tests, got: %v", viol)
 		}
 	}
@@ -1329,16 +1252,16 @@ func TestValidateBlackboxTests_BlackboxAllowed(t *testing.T) {
 // TestValidateBlackboxTests_DisabledByDefault tests that the rule is disabled when not configured
 func TestValidateBlackboxTests_DisabledByDefault(t *testing.T) {
 	g := &testGraph{
-		nodes: []FileNode{
+		nodes: []validator.FileNode{
 			&testFileNode{
 				relPath:      "internal/app/app.go",
 				pkg:          "app",
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 			&testFileNode{
 				relPath:      "internal/app/app_test.go", // Whitebox test
 				pkg:          "app",                      // Should be "app_test" if rule enabled
-				dependencies: []Dependency{},
+				dependencies: []validator.Dependency{},
 			},
 		},
 	}
@@ -1348,13 +1271,105 @@ func TestValidateBlackboxTests_DisabledByDefault(t *testing.T) {
 		requireBlackboxTests: false, // Rule disabled
 	}
 
-	v := New(cfg, g)
+	v := validator.New(cfg, g)
 	violations := v.Validate()
 
 	// Should NOT have any whitebox test violations when rule is disabled
 	for _, viol := range violations {
-		if viol.Type == ViolationWhiteboxTest {
+		if viol.Type == validator.ViolationWhiteboxTest {
 			t.Errorf("Did not expect ViolationWhiteboxTest when rule is disabled, got: %v", viol)
 		}
 	}
+}
+
+// TestViolation_InterfaceMethods tests the Violation interface methods
+func TestViolation_InterfaceMethods(t *testing.T) {
+	viol := validator.Violation{
+		Type:  validator.ViolationPkgToPkg,
+		File:  "pkg/http/server.go",
+		Line:  10,
+		Issue: "pkg/http imports pkg/database",
+		Rule:  "Packages in pkg/ cannot import other pkg/ packages",
+		Fix:   "Move shared logic to internal/",
+	}
+
+	if viol.GetType() != string(validator.ViolationPkgToPkg) {
+		t.Errorf("GetType() = %s, want %s", viol.GetType(), validator.ViolationPkgToPkg)
+	}
+
+	if viol.GetFile() != "pkg/http/server.go" {
+		t.Errorf("GetFile() = %s, want pkg/http/server.go", viol.GetFile())
+	}
+
+	if viol.GetLine() != 10 {
+		t.Errorf("GetLine() = %d, want 10", viol.GetLine())
+	}
+
+	if viol.GetIssue() != "pkg/http imports pkg/database" {
+		t.Errorf("GetIssue() = %s, want 'pkg/http imports pkg/database'", viol.GetIssue())
+	}
+
+	if viol.GetRule() != "Packages in pkg/ cannot import other pkg/ packages" {
+		t.Errorf("GetRule() = %s, want 'Packages in pkg/ cannot import other pkg/ packages'", viol.GetRule())
+	}
+
+	if viol.GetFix() != "Move shared logic to internal/" {
+		t.Errorf("GetFix() = %s, want 'Move shared logic to internal/'", viol.GetFix())
+	}
+}
+
+// TestNewWithPath tests NewWithPath constructor
+func TestNewWithPath(t *testing.T) {
+	g := &testGraph{
+		nodes: []validator.FileNode{},
+	}
+
+	cfg := &testConfig{
+		module:              "github.com/test/project",
+		requiredDirectories: map[string]string{"pkg": "Public API"},
+	}
+
+	projectPath := "/test/path"
+	v := validator.NewWithPath(cfg, g, projectPath)
+
+	if v == nil {
+		t.Fatal("expected validator, got nil")
+	}
+
+	// NewWithPath should allow structure validation (tested indirectly)
+	// by not panicking when Validate is called
+	_ = v.Validate()
+}
+
+// TestSetCoverageResults tests SetCoverageResults method
+func TestSetCoverageResults(t *testing.T) {
+	g := &testGraph{
+		nodes: []validator.FileNode{},
+	}
+
+	cfg := &testConfig{
+		module: "github.com/test/project",
+	}
+
+	v := validator.New(cfg, g)
+
+	coverageResults := []validator.PackageCoverage{
+		&testPackageCoverage{
+			packagePath: "github.com/test/project/pkg/http",
+			coverage:    85.5,
+			hasTests:    true,
+		},
+		&testPackageCoverage{
+			packagePath: "github.com/test/project/internal/app",
+			coverage:    92.3,
+			hasTests:    true,
+		},
+	}
+
+	v.SetCoverageResults(coverageResults)
+
+	// Verify it doesn't panic and can be called
+	// Coverage validation is tested elsewhere
+	violations := v.Validate()
+	_ = violations // use it to avoid unused variable warning
 }

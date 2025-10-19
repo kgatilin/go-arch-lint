@@ -477,21 +477,7 @@ rules:
 
 **Solution**: Adapters in `pkg/linter` explicitly convert slices by creating new slices and wrapping each element.
 
-**In tests**, use the same pattern:
-```go
-// Helper function for slice conversion
-func toGraphFiles(files []scanner.FileInfo) []graph.FileInfo {
-    result := make([]graph.FileInfo, len(files))
-    for i := range files {
-        result[i] = files[i]
-    }
-    return result
-}
-
-// Test adapter (mirrors production adapters in pkg/linter)
-type testGraphAdapter struct { g *graph.Graph }
-func (tga *testGraphAdapter) GetNodes() []FileNode { ... }
-```
+**In tests**, use blackbox testing through the public API - no need for test adapters since you'll be testing the exported functions directly.
 
 ## Five Domain Primitives (internal/)
 
@@ -551,9 +537,9 @@ Each internal package is a **completely isolated primitive** with a single respo
 ### Three Levels of Testing
 
 1. **Unit Tests** (`internal/*/` packages)
-   - Use white-box tests (`package mypackage`) to access internals
-   - Create adapter types to bridge dependencies (mirrors production adapters)
-   - Test individual components in isolation
+   - Use black-box tests (`package mypackage_test`) to test through public API
+   - Test individual components in isolation through exported functions
+   - This enforces good API design and ensures tests are resilient to internal refactoring
    - Example: `internal/validator/validator_test.go`
 
 2. **Integration Tests** (`pkg/linter/linter_test.go`)
@@ -572,16 +558,19 @@ Each internal package is a **completely isolated primitive** with a single respo
 
 **Example Unit Test (internal/validator/validator_test.go)**:
 ```go
-package validator  // white-box, not validator_test
+package validator_test  // black-box testing through public API
 
-// Test adapter (same pattern as pkg/linter adapters)
-type testGraphAdapter struct { g *graph.Graph }
-func (tga *testGraphAdapter) GetNodes() []FileNode { ... }
+import (
+    "testing"
+    "github.com/kgatilin/go-arch-lint/internal/validator"
+    "github.com/kgatilin/go-arch-lint/internal/graph"
+    "github.com/kgatilin/go-arch-lint/internal/config"
+)
 
 func TestValidate_PkgToPkgViolation(t *testing.T) {
-    files := []scanner.FileInfo{ /* ... */ }
-    g := graph.Build(toGraphFiles(files), module)
-    v := New(cfg, &testGraphAdapter{g: g})  // Use adapter!
+    cfg := &config.Config{ /* ... */ }
+    g := &graph.Graph{ /* ... */ }
+    v := validator.New(cfg, g)  // Test through public API
     violations := v.Validate()
     // assertions...
 }
@@ -635,7 +624,7 @@ func TestCLI_ExitCodes(t *testing.T) {
 }
 ```
 
-**All tests must create adapters** to work with internal package isolation.
+**All unit tests must use blackbox testing** (`package mypackage_test`) to ensure they test through the public API only.
 
 ## Validation Workflow
 

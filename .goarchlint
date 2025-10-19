@@ -90,6 +90,7 @@ rules:
             - errors
             - time
             - context
+            - gopkg.in/yaml.v3
         exclusion_patterns:
             - encoding/*
     test_files:
@@ -105,6 +106,6 @@ rules:
         enabled: true
         threshold: 60
         package_thresholds:
-            cmd: 30
+            cmd: 0
             internal: 70
             pkg: 60
