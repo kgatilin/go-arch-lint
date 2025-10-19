@@ -125,12 +125,13 @@ func isStdLib(importPath string) bool {
 
 // ErrorContext contains architectural guidance for error messages
 type ErrorContext struct {
-	Enabled             bool
-	PresetName          string
-	ArchitecturalGoals  string
-	Principles          []string
-	RefactoringGuidance string
-	CoverageGuidance    string
+	Enabled                  bool
+	PresetName               string
+	ArchitecturalGoals       string
+	Principles               []string
+	RefactoringGuidance      string
+	CoverageGuidance         string
+	BlackboxTestingGuidance  string
 }
 
 // FormatViolationsWithContext creates a formatted report with architectural context
@@ -193,34 +194,50 @@ func FormatViolationsWithContext(violations []Violation, errorContext *ErrorCont
 	if errorContext != nil && errorContext.Enabled {
 		sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
 
-		// Check if there are coverage violations
-		hasCoverageViolations := false
+		// Categorize violations into test-related vs architectural
+		hasTestViolations := false
 		hasArchitecturalViolations := false
+		hasWhiteboxTestViolations := false
+
 		for _, v := range violations {
-			if v.GetType() == "Insufficient Test Coverage" {
-				hasCoverageViolations = true
+			violationType := v.GetType()
+
+			// Test-related violations (coverage, test file issues)
+			if violationType == "Insufficient Test Coverage" ||
+			   violationType == "Test File Wrong Location" {
+				hasTestViolations = true
+			} else if violationType == "Whitebox Test" {
+				hasWhiteboxTestViolations = true
 			} else {
+				// Everything else is architectural (dependencies, structure, etc.)
 				hasArchitecturalViolations = true
 			}
 		}
 
-		// Show refactoring guidance for architectural violations
+		// Show refactoring guidance ONLY for architectural violations
 		if hasArchitecturalViolations && errorContext.RefactoringGuidance != "" {
 			sb.WriteString("┌─ REFACTORING GUIDANCE ─────────────────────────────────────────────────────────┐\n")
 			sb.WriteString(errorContext.RefactoringGuidance)
 			sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
 		}
 
-		// Show coverage guidance for coverage violations
-		if hasCoverageViolations && errorContext.CoverageGuidance != "" {
+		// Show test/coverage guidance ONLY for test-related violations
+		if hasTestViolations && errorContext.CoverageGuidance != "" {
 			sb.WriteString("┌─ TEST COVERAGE GUIDANCE ───────────────────────────────────────────────────────┐\n")
 			sb.WriteString(errorContext.CoverageGuidance)
 			sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
 		}
 
+		// Show blackbox testing guidance ONLY for whitebox test violations
+		if hasWhiteboxTestViolations && errorContext.BlackboxTestingGuidance != "" {
+			sb.WriteString("┌─ BLACKBOX TESTING GUIDANCE ────────────────────────────────────────────────────┐\n")
+			sb.WriteString(errorContext.BlackboxTestingGuidance)
+			sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
+		}
+
 		// Different tips based on violation types
-		if hasCoverageViolations && hasArchitecturalViolations {
-			sb.WriteString("💡 TIP: Address architectural violations first, then improve test coverage.\n")
+		if (hasTestViolations || hasWhiteboxTestViolations) && hasArchitecturalViolations {
+			sb.WriteString("💡 TIP: Address architectural violations first, then improve test quality and coverage.\n")
 			sb.WriteString("   Good tests verify correct behavior - make sure the architecture is sound\n")
 			sb.WriteString("   before investing in comprehensive test coverage.\n")
 		} else if hasArchitecturalViolations {
@@ -228,7 +245,15 @@ func FormatViolationsWithContext(violations []Violation, errorContext *ErrorCont
 			sb.WriteString("   Focus on understanding WHY the target architecture matters, then refactor\n")
 			sb.WriteString("   accordingly. Don't just move code to make the linter happy - restructure\n")
 			sb.WriteString("   to achieve the architectural goals described above.\n")
-		} else if hasCoverageViolations {
+		} else if hasWhiteboxTestViolations && hasTestViolations {
+			sb.WriteString("💡 TIP: Start with blackbox testing, then improve coverage.\n")
+			sb.WriteString("   Blackbox tests (package foo_test) are more resilient to refactoring and\n")
+			sb.WriteString("   encourage better API design. After converting to blackbox, focus on coverage.\n")
+		} else if hasWhiteboxTestViolations {
+			sb.WriteString("💡 TIP: Blackbox testing improves test resilience and API design.\n")
+			sb.WriteString("   Tests using 'package foo_test' verify behavior through the public interface,\n")
+			sb.WriteString("   making them more maintainable and resilient to internal refactoring.\n")
+		} else if hasTestViolations {
 			sb.WriteString("💡 TIP: Test coverage ensures your code works correctly and can be refactored safely.\n")
 			sb.WriteString("   Focus on testing critical paths and business logic first. Use coverage\n")
 			sb.WriteString("   reports to identify untested code, then write tests that verify behavior.\n")

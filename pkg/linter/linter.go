@@ -186,6 +186,11 @@ func Run(projectPath string, format string, detailed bool) (string, string, bool
 			// Log error but don't fail - coverage might not be critical
 			fmt.Printf("Warning: Failed to run coverage analysis: %v\n", err)
 		} else {
+			// Display coverage summary
+			summaries := coverage.SummarizeByDirectory(coverageResults, cfg.Module, cfg.ScanPaths)
+			overallCoverage := coverage.CalculateOverallCoverage(coverageResults)
+			coverage.PrintSummary(summaries, overallCoverage)
+
 			// Convert to validator.PackageCoverage interface
 			validatorCoverage := make([]validator.PackageCoverage, len(coverageResults))
 			for i := range coverageResults {
@@ -219,12 +224,13 @@ func Run(projectPath string, format string, detailed bool) (string, string, bool
 	if errorPrompt.Enabled {
 		// Create error context from config
 		errorContext := &output.ErrorContext{
-			Enabled:             true,
-			PresetName:          cfg.PresetUsed,
-			ArchitecturalGoals:  errorPrompt.ArchitecturalGoals,
-			Principles:          errorPrompt.Principles,
-			RefactoringGuidance: errorPrompt.RefactoringGuidance,
-			CoverageGuidance:    errorPrompt.CoverageGuidance,
+			Enabled:                  true,
+			PresetName:               cfg.PresetUsed,
+			ArchitecturalGoals:       errorPrompt.ArchitecturalGoals,
+			Principles:               errorPrompt.Principles,
+			RefactoringGuidance:      errorPrompt.RefactoringGuidance,
+			CoverageGuidance:         errorPrompt.CoverageGuidance,
+			BlackboxTestingGuidance:  errorPrompt.BlackboxTestingGuidance,
 		}
 		violationsOutput = output.FormatViolationsWithContext(outViolations, errorContext)
 	} else {

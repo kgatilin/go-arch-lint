@@ -19,11 +19,12 @@ type Config struct {
 }
 
 type ErrorPrompt struct {
-	Enabled             bool     `yaml:"enabled"`
-	ArchitecturalGoals  string   `yaml:"architectural_goals,omitempty"`
-	Principles          []string `yaml:"principles,omitempty"`
-	RefactoringGuidance string   `yaml:"refactoring_guidance,omitempty"`
-	CoverageGuidance    string   `yaml:"coverage_guidance,omitempty"`
+	Enabled                  bool     `yaml:"enabled"`
+	ArchitecturalGoals       string   `yaml:"architectural_goals,omitempty"`
+	Principles               []string `yaml:"principles,omitempty"`
+	RefactoringGuidance      string   `yaml:"refactoring_guidance,omitempty"`
+	CoverageGuidance         string   `yaml:"coverage_guidance,omitempty"`
+	BlackboxTestingGuidance  string   `yaml:"blackbox_testing_guidance,omitempty"`
 }
 
 type Structure struct {

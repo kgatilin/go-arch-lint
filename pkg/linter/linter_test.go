@@ -1321,18 +1321,13 @@ func TestLoad(t *testing.T) {
 		t.Error("did not expect violation for blackbox test internal/config/config_test.go")
 	}
 
-	// Should contain educational prompt about WHY blackbox testing matters
-	expectedEducationalContent := []string{
-		"WHY THIS MATTERS",
-		"public API",
-		"internal implementation",
-		"Go best practice",
+	// Violations should be concise (no error_prompt enabled in this test)
+	if !strings.Contains(violationsOutput, "Blackbox testing is enforced") {
+		t.Error("expected violation to contain rule about blackbox testing")
 	}
 
-	for _, content := range expectedEducationalContent {
-		if !strings.Contains(violationsOutput, content) {
-			t.Errorf("expected violation output to contain educational content: '%s'", content)
-		}
+	if !strings.Contains(violationsOutput, "Change package declaration from 'package app' to 'package app_test'") {
+		t.Error("expected violation to contain fix instruction")
 	}
 }
 

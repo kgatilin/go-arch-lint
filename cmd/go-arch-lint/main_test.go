@@ -1,6 +1,7 @@
 package main_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,33 +9,60 @@ import (
 	"testing"
 )
 
-// buildBinary builds the go-arch-lint binary for testing
-func buildBinary(t *testing.T) string {
-	t.Helper()
+// Package-level variable to hold the binary path for all tests
+var binaryPath string
 
-	// Build in temp directory
-	tmpDir := t.TempDir()
-	binaryPath := filepath.Join(tmpDir, "go-arch-lint")
+// TestMain runs before all tests and builds the binary once
+func TestMain(m *testing.M) {
+	// Build the binary once for all tests
+	binary, cleanup, err := setupBinary()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to build binary: %v\n", err)
+		os.Exit(1)
+	}
+	binaryPath = binary
+
+	// Run all tests
+	code := m.Run()
+
+	// Cleanup
+	cleanup()
+
+	os.Exit(code)
+}
+
+// setupBinary builds the binary and returns the path and cleanup function
+func setupBinary() (string, func(), error) {
+	// Create temp directory for binary
+	tmpDir, err := os.MkdirTemp("", "go-arch-lint-test-*")
+	if err != nil {
+		return "", nil, err
+	}
+
+	binary := filepath.Join(tmpDir, "go-arch-lint")
 
 	// Get project root (two levels up from cmd/go-arch-lint)
 	projectRoot, err := filepath.Abs("../..")
 	if err != nil {
-		t.Fatalf("failed to get project root: %v", err)
+		return "", nil, fmt.Errorf("failed to get project root: %w", err)
 	}
 
 	// Build the binary
-	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/go-arch-lint")
+	cmd := exec.Command("go", "build", "-o", binary, "./cmd/go-arch-lint")
 	cmd.Dir = projectRoot
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("failed to build binary: %v\nOutput: %s", err, output)
+		return "", nil, fmt.Errorf("build failed: %v\nOutput: %s", err, output)
 	}
 
-	return binaryPath
+	cleanup := func() {
+		os.RemoveAll(tmpDir)
+	}
+
+	return binary, cleanup, nil
 }
 
 func TestCLI_NoViolations_ExitCode0(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create valid project
@@ -89,7 +117,7 @@ func Run() {}
 	}
 
 	// Run binary
-	cmd := exec.Command(binary, ".")
+	cmd := exec.Command(binaryPath, ".")
 	cmd.Dir = tmpDir
 	output, err := cmd.CombinedOutput()
 
@@ -105,7 +133,6 @@ func Run() {}
 }
 
 func TestCLI_WithViolations_ExitCode1(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create project with violations
@@ -159,7 +186,7 @@ func Helper() {}
 	}
 
 	// Run binary
-	cmd := exec.Command(binary, ".")
+	cmd := exec.Command(binaryPath, ".")
 	cmd.Dir = tmpDir
 	output, err := cmd.CombinedOutput()
 
@@ -187,7 +214,6 @@ func Helper() {}
 }
 
 func TestCLI_ExitZeroFlag(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create project with violations
@@ -241,7 +267,7 @@ func Helper() {}
 	}
 
 	// Run binary with -exit-zero flag
-	cmd := exec.Command(binary, "-exit-zero", ".")
+	cmd := exec.Command(binaryPath, "-exit-zero", ".")
 	cmd.Dir = tmpDir
 	output, err := cmd.CombinedOutput()
 
@@ -263,7 +289,6 @@ func Helper() {}
 }
 
 func TestCLI_SharedExternalImports_WarnMode(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create project with shared external import in warn mode
@@ -327,7 +352,7 @@ func Query() error {
 	}
 
 	// Run binary
-	cmd := exec.Command(binary, ".")
+	cmd := exec.Command(binaryPath, ".")
 	cmd.Dir = tmpDir
 	output, err := cmd.CombinedOutput()
 
@@ -353,7 +378,6 @@ func Query() error {
 }
 
 func TestCLI_SharedExternalImports_ErrorMode(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create project with shared external import in error mode
@@ -417,7 +441,7 @@ func Query() error {
 	}
 
 	// Run binary
-	cmd := exec.Command(binary, ".")
+	cmd := exec.Command(binaryPath, ".")
 	cmd.Dir = tmpDir
 	output, err := cmd.CombinedOutput()
 
@@ -441,7 +465,6 @@ func Query() error {
 }
 
 func TestCLI_MarkdownFormat(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create simple project
@@ -495,7 +518,7 @@ func Run() {}
 	}
 
 	// Run binary with markdown format
-	cmd := exec.Command(binary, "-format=markdown", ".")
+	cmd := exec.Command(binaryPath, "-format=markdown", ".")
 	cmd.Dir = tmpDir
 	output, err := cmd.CombinedOutput()
 
@@ -519,7 +542,6 @@ func Run() {}
 }
 
 func TestCLI_InitPreset_DDD(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create go.mod
@@ -532,7 +554,7 @@ go 1.21
 	}
 
 	// Run init with ddd preset
-	cmd := exec.Command(binary, "init", "--preset=ddd")
+	cmd := exec.Command(binaryPath, "init", "--preset=ddd")
 	cmd.Dir = tmpDir
 	output, err := cmd.CombinedOutput()
 
@@ -590,7 +612,6 @@ go 1.21
 }
 
 func TestCLI_InitPreset_Simple(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create go.mod
@@ -603,7 +624,7 @@ go 1.21
 	}
 
 	// Run init with simple preset
-	cmd := exec.Command(binary, "init", "--preset=simple")
+	cmd := exec.Command(binaryPath, "init", "--preset=simple")
 	cmd.Dir = tmpDir
 	output, err := cmd.CombinedOutput()
 
@@ -643,7 +664,6 @@ go 1.21
 }
 
 func TestCLI_InitPreset_Hexagonal(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create go.mod
@@ -656,7 +676,7 @@ go 1.21
 	}
 
 	// Run init with hexagonal preset
-	cmd := exec.Command(binary, "init", "--preset=hexagonal")
+	cmd := exec.Command(binaryPath, "init", "--preset=hexagonal")
 	cmd.Dir = tmpDir
 	output, err := cmd.CombinedOutput()
 
@@ -692,7 +712,6 @@ go 1.21
 }
 
 func TestCLI_Refresh_SamePreset(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create go.mod
@@ -705,7 +724,7 @@ go 1.21
 	}
 
 	// Initialize with simple preset
-	initCmd := exec.Command(binary, "init", "--preset=simple", "--create-dirs=false")
+	initCmd := exec.Command(binaryPath, "init", "--preset=simple", "--create-dirs=false")
 	initCmd.Dir = tmpDir
 	output, err := initCmd.CombinedOutput()
 	if err != nil {
@@ -724,7 +743,7 @@ go 1.21
 	}
 
 	// Run refresh without preset flag (should use preset_used from config)
-	refreshCmd := exec.Command(binary, "refresh")
+	refreshCmd := exec.Command(binaryPath, "refresh")
 	refreshCmd.Dir = tmpDir
 	output, err = refreshCmd.CombinedOutput()
 	if err != nil {
@@ -768,7 +787,6 @@ go 1.21
 }
 
 func TestCLI_Refresh_SwitchPreset(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create go.mod
@@ -781,7 +799,7 @@ go 1.21
 	}
 
 	// Initialize with simple preset
-	initCmd := exec.Command(binary, "init", "--preset=simple", "--create-dirs=false")
+	initCmd := exec.Command(binaryPath, "init", "--preset=simple", "--create-dirs=false")
 	initCmd.Dir = tmpDir
 	output, err := initCmd.CombinedOutput()
 	if err != nil {
@@ -789,7 +807,7 @@ go 1.21
 	}
 
 	// Refresh with ddd preset
-	refreshCmd := exec.Command(binary, "refresh", "--preset=ddd")
+	refreshCmd := exec.Command(binaryPath, "refresh", "--preset=ddd")
 	refreshCmd.Dir = tmpDir
 	output, err = refreshCmd.CombinedOutput()
 	if err != nil {
@@ -827,13 +845,12 @@ go 1.21
 }
 
 func TestCLI_Refresh_NoConfig(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Don't create .goarchlint file
 
 	// Try to refresh
-	refreshCmd := exec.Command(binary, "refresh")
+	refreshCmd := exec.Command(binaryPath, "refresh")
 	refreshCmd.Dir = tmpDir
 	output, err := refreshCmd.CombinedOutput()
 
@@ -849,7 +866,6 @@ func TestCLI_Refresh_NoConfig(t *testing.T) {
 }
 
 func TestCLI_Refresh_CustomConfig(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create go.mod
@@ -874,7 +890,7 @@ rules:
 	}
 
 	// Try to refresh without specifying preset
-	refreshCmd := exec.Command(binary, "refresh")
+	refreshCmd := exec.Command(binaryPath, "refresh")
 	refreshCmd.Dir = tmpDir
 	output, err := refreshCmd.CombinedOutput()
 
@@ -890,7 +906,6 @@ rules:
 }
 
 func TestCLI_Init_GeneratesFullDocs(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create go.mod
@@ -918,7 +933,7 @@ go 1.21
 	}
 
 	// Run init with simple preset
-	initCmd := exec.Command(binary, "init", "--preset=simple")
+	initCmd := exec.Command(binaryPath, "init", "--preset=simple")
 	initCmd.Dir = tmpDir
 	output, err := initCmd.CombinedOutput()
 	if err != nil {
@@ -962,8 +977,6 @@ go 1.21
 }
 
 func TestCLI_Help(t *testing.T) {
-	binary := buildBinary(t)
-
 	testCases := []struct {
 		name string
 		args []string
@@ -975,7 +988,7 @@ func TestCLI_Help(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := exec.Command(binary, tc.args...)
+			cmd := exec.Command(binaryPath, tc.args...)
 			output, err := cmd.CombinedOutput()
 
 			// Should exit with code 0
@@ -1039,7 +1052,6 @@ func TestCLI_Help(t *testing.T) {
 
 // TestCLI_RequireBlackboxTests tests that the CLI detects whitebox tests
 func TestCLI_RequireBlackboxTests(t *testing.T) {
-	binary := buildBinary(t)
 	tmpDir := t.TempDir()
 
 	// Create go.mod
@@ -1105,7 +1117,7 @@ func TestProcess(t *testing.T) {
 	}
 
 	// Run binary
-	cmd := exec.Command(binary, ".")
+	cmd := exec.Command(binaryPath, ".")
 	cmd.Dir = tmpDir
 	output, err := cmd.CombinedOutput()
 
@@ -1140,23 +1152,139 @@ func TestProcess(t *testing.T) {
 		t.Error("expected violation to suggest package name 'app_test'")
 	}
 
-	// Should contain educational prompt about WHY blackbox testing matters
-	expectedEducationalContent := []string{
-		"WHY THIS MATTERS",
-		"public API",
-		"internal implementation",
-		"public interface",
-		"Go best practice",
+	// Should have concise rule and fix (no error_prompt enabled in this test)
+	if !strings.Contains(outputStr, "Blackbox testing is enforced") {
+		t.Error("expected violation to contain rule about blackbox testing")
 	}
 
-	for _, content := range expectedEducationalContent {
-		if !strings.Contains(outputStr, content) {
-			t.Errorf("expected output to contain educational content: '%s'", content)
+	if !strings.Contains(outputStr, "Change package declaration from 'package app' to 'package app_test'") {
+		t.Error("expected violation to contain fix instruction")
+	}
+}
+
+// TestCLI_WhiteboxTestGuidance_NotRepeated verifies that blackbox testing guidance
+// appears once at the end, not repeated for each violation
+func TestCLI_WhiteboxTestGuidance_NotRepeated(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create .goarchlint with require_blackbox and error_prompt enabled
+	configYAML := `scan_paths:
+  - internal
+
+structure:
+  required_directories:
+    internal: "Internal packages"
+  allow_other_directories: true
+
+rules:
+  directories_import:
+    internal: []
+  detect_unused: false
+  test_files:
+    lint: true
+    require_blackbox: true
+
+error_prompt:
+  enabled: true
+  architectural_goals: "Test architecture goals"
+  principles:
+    - "Test principle 1"
+  blackbox_testing_guidance: |
+    **Why Blackbox Testing Matters:**
+
+    Blackbox tests verify behavior through the public API.
+
+    **How to convert:**
+    1. Change package declaration to package foo_test
+    2. Import your package
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create THREE internal packages with whitebox tests
+	for i := 1; i <= 3; i++ {
+		pkgName := fmt.Sprintf("pkg%d", i)
+		pkgDir := filepath.Join(tmpDir, "internal", pkgName)
+		if err := os.MkdirAll(pkgDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create source file
+		srcGo := fmt.Sprintf(`package %s
+
+func Process() string {
+	return "processed"
+}
+`, pkgName)
+		if err := os.WriteFile(filepath.Join(pkgDir, pkgName+".go"), []byte(srcGo), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create WHITEBOX test
+		testGo := fmt.Sprintf(`package %s
+
+import "testing"
+
+func TestProcess(t *testing.T) {
+	result := Process()
+	if result != "processed" {
+		t.Fail()
+	}
+}
+`, pkgName)
+		if err := os.WriteFile(filepath.Join(pkgDir, pkgName+"_test.go"), []byte(testGo), 0644); err != nil {
+			t.Fatal(err)
 		}
 	}
 
-	// Should provide actionable fix guidance
-	if !strings.Contains(outputStr, "After changing to blackbox testing") {
-		t.Error("expected output to contain fix guidance")
+	// Run binary
+	cmd := exec.Command(binaryPath, ".")
+	cmd.Dir = tmpDir
+	output, _ := cmd.CombinedOutput()
+	outputStr := string(output)
+
+	// Should have 3 whitebox test violations
+	whiteboxCount := strings.Count(outputStr, "[ERROR] Whitebox Test")
+	if whiteboxCount != 3 {
+		t.Errorf("expected 3 whitebox test violations, got %d", whiteboxCount)
+	}
+
+	// Each violation should be concise (no "WHY THIS MATTERS" in violation body)
+	// The "WHY THIS MATTERS" should only appear in the guidance section at the end
+	violationsSection := outputStr[strings.Index(outputStr, "VIOLATIONS"):strings.Index(outputStr, "└────────────────────────────────────────────────────────────────────────────────┘")]
+	whyThisMattersInViolations := strings.Count(violationsSection, "WHY THIS MATTERS")
+	if whyThisMattersInViolations > 0 {
+		t.Errorf("expected 'WHY THIS MATTERS' to not appear in violations section, but found %d occurrences", whyThisMattersInViolations)
+	}
+
+	// Should have exactly ONE "BLACKBOX TESTING GUIDANCE" section
+	guidanceCount := strings.Count(outputStr, "BLACKBOX TESTING GUIDANCE")
+	if guidanceCount != 1 {
+		t.Errorf("expected exactly 1 BLACKBOX TESTING GUIDANCE section, got %d", guidanceCount)
+	}
+
+	// The guidance section should contain the educational content
+	if !strings.Contains(outputStr, "**Why Blackbox Testing Matters:**") {
+		t.Error("expected blackbox testing guidance to contain educational content")
+	}
+
+	if !strings.Contains(outputStr, "**How to convert:**") {
+		t.Error("expected blackbox testing guidance to contain conversion steps")
+	}
+
+	// Verify that violations themselves are concise
+	if strings.Contains(violationsSection, "After changing to blackbox testing") {
+		t.Error("expected detailed guidance to NOT appear in individual violations")
 	}
 }
+
