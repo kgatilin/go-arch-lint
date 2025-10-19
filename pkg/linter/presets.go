@@ -604,7 +604,7 @@ func RefreshConfigFromPreset(projectPath, presetName string) error {
 		}
 
 		if cfg.PresetUsed == "" || cfg.PresetUsed == "custom" {
-			return fmt.Errorf("config was not created from a preset, cannot refresh. Use --preset to specify a preset to switch to.")
+			return fmt.Errorf("config was not created from a preset, cannot refresh. Use --preset to specify a preset to switch to")
 		}
 
 		presetName = cfg.PresetUsed
