@@ -292,9 +292,9 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool) 
 	// Determine if violations should cause build failure (respect warn mode)
 	shouldFail := shouldFailBuild(violations, cfg)
 
-	// Run staticcheck if enabled
+	// Run staticcheck if enabled (either via config or CLI flag)
 	var staticcheckFailed bool
-	if runStaticcheck {
+	if runStaticcheck || cfg.ShouldRunStaticcheck() {
 		staticcheckOutput, hasIssues, err := runStaticcheckTool(projectPath)
 		if err != nil {
 			// If staticcheck is not available or fails to run, show error but don't fail build

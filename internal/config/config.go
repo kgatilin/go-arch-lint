@@ -51,6 +51,7 @@ type Rules struct {
 	SharedExternalImports SharedExternalImports `yaml:"shared_external_imports,omitempty"`
 	TestFiles             TestFiles             `yaml:"test_files,omitempty"`
 	TestCoverage          TestCoverage          `yaml:"test_coverage,omitempty"`
+	Staticcheck           bool                  `yaml:"staticcheck,omitempty"`
 }
 
 type TestFiles struct {
@@ -157,6 +158,11 @@ func (c *Config) GetPackageThresholds() map[string]float64 {
 // GetModule implements validator.Config interface
 func (c *Config) GetModule() string {
 	return c.Module
+}
+
+// ShouldRunStaticcheck returns whether staticcheck should be run
+func (c *Config) ShouldRunStaticcheck() bool {
+	return c.Rules.Staticcheck
 }
 
 // Load reads and parses the .goarchlint configuration file

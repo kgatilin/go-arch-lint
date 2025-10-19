@@ -1514,3 +1514,137 @@ func Run() {}
 	}
 }
 
+func TestCLI_Staticcheck_ConfigEnabled(t *testing.T) {
+	// Skip if staticcheck is not available
+	if _, err := exec.LookPath("staticcheck"); err != nil {
+		t.Skip("staticcheck not available in PATH")
+	}
+
+	tmpDir := t.TempDir()
+
+	// Create config with staticcheck enabled
+	configYAML := `rules:
+  directories_import:
+    cmd: [pkg]
+    pkg: []
+  staticcheck: true
+scan_paths:
+  - pkg
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	goMod := `module github.com/test/staticcheck-config
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create simple clean code
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	pkgGo := `package pkg
+
+func Run() {
+	println("Hello")
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "pkg.go"), []byte(pkgGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run binary WITHOUT --staticcheck flag (should still run due to config)
+	cmd := exec.Command(binaryPath, ".")
+	cmd.Dir = tmpDir
+	output, err := cmd.CombinedOutput()
+	outputStr := string(output)
+
+	// Should succeed
+	if err != nil {
+		t.Errorf("expected exit code 0, got error: %v\nOutput: %s", err, output)
+	}
+
+	// Should contain staticcheck results (enabled via config)
+	if !strings.Contains(outputStr, "STATICCHECK RESULTS") {
+		t.Errorf("expected staticcheck to run (enabled via config), but no results found. Output: %s", outputStr)
+	}
+
+	// Should show no issues found
+	if !strings.Contains(outputStr, "✓ No issues found") {
+		t.Errorf("expected staticcheck to show no issues, got: %s", outputStr)
+	}
+}
+
+func TestCLI_Staticcheck_ConfigAndFlagEnabled(t *testing.T) {
+	// Skip if staticcheck is not available
+	if _, err := exec.LookPath("staticcheck"); err != nil {
+		t.Skip("staticcheck not available in PATH")
+	}
+
+	tmpDir := t.TempDir()
+
+	// Create config with staticcheck disabled
+	configYAML := `rules:
+  directories_import:
+    cmd: [pkg]
+    pkg: []
+  staticcheck: false
+scan_paths:
+  - pkg
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	goMod := `module github.com/test/staticcheck-override
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create simple clean code
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	pkgGo := `package pkg
+
+func Run() {
+	println("Hello")
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "pkg.go"), []byte(pkgGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run binary WITH --staticcheck flag (should override config)
+	cmd := exec.Command(binaryPath, "--staticcheck", ".")
+	cmd.Dir = tmpDir
+	output, err := cmd.CombinedOutput()
+	outputStr := string(output)
+
+	// Should succeed
+	if err != nil {
+		t.Errorf("expected exit code 0, got error: %v\nOutput: %s", err, output)
+	}
+
+	// Should contain staticcheck results (flag overrides config)
+	if !strings.Contains(outputStr, "STATICCHECK RESULTS") {
+		t.Errorf("expected staticcheck to run (flag override), but no results found. Output: %s", outputStr)
+	}
+
+	// Should show no issues found
+	if !strings.Contains(outputStr, "✓ No issues found") {
+		t.Errorf("expected staticcheck to show no issues, got: %s", outputStr)
+	}
+}
+
