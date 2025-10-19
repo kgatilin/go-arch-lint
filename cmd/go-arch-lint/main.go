@@ -85,18 +85,19 @@ REFRESH COMMAND:
 DOCS COMMAND:
     go-arch-lint docs [flags] [path]
 
-    Generate both lightweight index and comprehensive architecture documentation.
-    Creates two files: arch-index.md (lightweight, for quick reference) and
-    arch-generated.md (detailed, with full dependency graph and API).
+    Generate architecture index with all packages listed.
+    Each package entry includes a command to get detailed info on-demand.
 
     Flags:
-        -output string (default: "docs/arch-generated.md")
-            Output file path for full documentation
-            (Index is always written to docs/arch-index.md)
+        -output string (default: "docs/arch-index.md")
+            Output file path for index documentation
 
     Examples:
-        go-arch-lint docs                                  # Generates both docs
-        go-arch-lint docs --output=ARCHITECTURE.md         # Custom location for full docs
+        go-arch-lint docs                                  # Generate index
+        go-arch-lint docs --output=ARCH_INDEX.md          # Custom location
+
+    To get details about a specific package:
+        go-arch-lint -format=package pkg/linter           # (Not yet implemented)
 
 EXAMPLES:
     # Validate current directory
@@ -114,7 +115,7 @@ EXAMPLES:
     # Show public API
     go-arch-lint -format=api .
 
-    # Generate both index and full documentation
+    # Generate architecture index
     go-arch-lint docs
 
     # Check violations but don't fail CI
@@ -318,7 +319,7 @@ func showPresetMenu() (string, error) {
 func runDocs() int {
 	// Create a new flag set for docs subcommand
 	docsFlags := flag.NewFlagSet("docs", flag.ExitOnError)
-	outputFlag := docsFlags.String("output", "docs/arch-generated.md", "Output file path for full documentation")
+	outputFlag := docsFlags.String("output", "docs/arch-index.md", "Output file path for index documentation")
 
 	// Parse flags starting from os.Args[2] (after "docs")
 	if err := docsFlags.Parse(os.Args[2:]); err != nil {
@@ -339,25 +340,22 @@ func runDocs() int {
 		return 2
 	}
 
-	// Generate index documentation (lightweight)
+	// Generate index documentation
 	fmt.Println("Generating architecture index...")
-	indexOutput, _, _, err := linter.Run(absPath, "index", false, false)
+	indexOutput, violationsOutput, shouldFail, err := linter.Run(absPath, "index", false, false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 2
 	}
 
-	// Determine output paths
-	fullOutputPath := *outputFlag
-	if !filepath.IsAbs(fullOutputPath) {
-		fullOutputPath = filepath.Join(absPath, fullOutputPath)
+	// Determine output path
+	indexPath := *outputFlag
+	if !filepath.IsAbs(indexPath) {
+		indexPath = filepath.Join(absPath, indexPath)
 	}
 
-	// Index goes to docs/arch-index.md
-	indexPath := filepath.Join(filepath.Dir(fullOutputPath), "arch-index.md")
-
 	// Create directory if needed
-	outputDir := filepath.Dir(fullOutputPath)
+	outputDir := filepath.Dir(indexPath)
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating output directory: %v\n", err)
 		return 2
@@ -370,22 +368,7 @@ func runDocs() int {
 	}
 
 	fmt.Printf("✓ Generated architecture index: %s\n", indexPath)
-
-	// Generate full documentation (comprehensive)
-	fmt.Println("Generating full documentation...")
-	graphOutput, violationsOutput, shouldFail, err := linter.Run(absPath, "full", true, false)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		return 2
-	}
-
-	// Write full documentation
-	if err := os.WriteFile(fullOutputPath, []byte(graphOutput), 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing full documentation: %v\n", err)
-		return 2
-	}
-
-	fmt.Printf("✓ Generated full documentation: %s\n", fullOutputPath)
+	fmt.Println("\nUse package-specific Details commands in the index to get comprehensive info about each package.")
 
 	// Report violations if any
 	if violationsOutput != "" {
