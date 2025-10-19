@@ -605,9 +605,12 @@ go 1.21
 		t.Error("expected encoding/* in exclusion_patterns")
 	}
 
-	// Verify preset_used is set
-	if !strings.Contains(configStr, "preset_used: ddd") {
-		t.Error("expected preset_used: ddd in config")
+	// Verify preset name is set in the new format
+	if !strings.Contains(configStr, "preset:") {
+		t.Error("expected preset: section in config")
+	}
+	if !strings.Contains(configStr, "name: ddd") {
+		t.Error("expected name: ddd in preset section")
 	}
 }
 
@@ -775,9 +778,12 @@ go 1.21
 		t.Error("expected custom modification to be removed after refresh")
 	}
 
-	// Verify it's still the simple preset
-	if !strings.Contains(refreshedStr, "preset_used: simple") {
-		t.Error("expected preset_used: simple after refresh")
+	// Verify it's still the simple preset (new format)
+	if !strings.Contains(refreshedStr, "preset:") {
+		t.Error("expected preset: section after refresh")
+	}
+	if !strings.Contains(refreshedStr, "name: simple") {
+		t.Error("expected name: simple in preset section after refresh")
 	}
 
 	// Verify header indicates refresh
@@ -822,9 +828,12 @@ go 1.21
 	}
 	refreshedStr := string(refreshedData)
 
-	// Verify it's now the ddd preset
-	if !strings.Contains(refreshedStr, "preset_used: ddd") {
-		t.Error("expected preset_used: ddd after switching presets")
+	// Verify it's now the ddd preset (new format)
+	if !strings.Contains(refreshedStr, "preset:") {
+		t.Error("expected preset: section after switching presets")
+	}
+	if !strings.Contains(refreshedStr, "name: ddd") {
+		t.Error("expected name: ddd in preset section after switching presets")
 	}
 
 	// Verify ddd-specific directories
