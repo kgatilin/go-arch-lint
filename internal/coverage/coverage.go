@@ -269,6 +269,16 @@ func (r *Runner) findPackages(scanPaths []string) ([]string, error) {
 	for _, scanPath := range scanPaths {
 		fullPath := filepath.Join(r.projectPath, scanPath)
 
+		// Check if directory exists before walking
+		if _, err := os.Stat(fullPath); err != nil {
+			if os.IsNotExist(err) {
+				// Directory doesn't exist, skip it gracefully
+				continue
+			}
+			// Other error (permission issue, etc.)
+			return nil, err
+		}
+
 		err := filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
