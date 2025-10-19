@@ -23,6 +23,7 @@ type ErrorPrompt struct {
 	ArchitecturalGoals  string   `yaml:"architectural_goals,omitempty"`
 	Principles          []string `yaml:"principles,omitempty"`
 	RefactoringGuidance string   `yaml:"refactoring_guidance,omitempty"`
+	CoverageGuidance    string   `yaml:"coverage_guidance,omitempty"`
 }
 
 type Structure struct {
@@ -37,11 +38,18 @@ type SharedExternalImports struct {
 	Detect            bool     `yaml:"detect"`              // Enable/disable detection
 }
 
+type TestCoverage struct {
+	Enabled           bool               `yaml:"enabled"`
+	Threshold         float64            `yaml:"threshold"`                   // Overall project threshold (0-100)
+	PackageThresholds map[string]float64 `yaml:"package_thresholds,omitempty"` // Hierarchical package thresholds
+}
+
 type Rules struct {
 	DirectoriesImport     map[string][]string   `yaml:"directories_import"`
 	DetectUnused          bool                  `yaml:"detect_unused"`
 	SharedExternalImports SharedExternalImports `yaml:"shared_external_imports,omitempty"`
 	TestFiles             TestFiles             `yaml:"test_files,omitempty"`
+	TestCoverage          TestCoverage          `yaml:"test_coverage,omitempty"`
 }
 
 type TestFiles struct {
@@ -125,6 +133,29 @@ func (c *Config) GetTestFileLocation() string {
 // ShouldRequireBlackboxTests implements validator.Config interface
 func (c *Config) ShouldRequireBlackboxTests() bool {
 	return c.Rules.TestFiles.RequireBlackbox
+}
+
+// IsCoverageEnabled implements coverage.Config interface
+func (c *Config) IsCoverageEnabled() bool {
+	return c.Rules.TestCoverage.Enabled
+}
+
+// GetCoverageThreshold implements coverage.Config interface
+func (c *Config) GetCoverageThreshold() float64 {
+	return c.Rules.TestCoverage.Threshold
+}
+
+// GetPackageThresholds implements coverage.Config interface
+func (c *Config) GetPackageThresholds() map[string]float64 {
+	if c.Rules.TestCoverage.PackageThresholds == nil {
+		return make(map[string]float64)
+	}
+	return c.Rules.TestCoverage.PackageThresholds
+}
+
+// GetModule implements validator.Config interface
+func (c *Config) GetModule() string {
+	return c.Module
 }
 
 // Load reads and parses the .goarchlint configuration file

@@ -130,6 +130,7 @@ type ErrorContext struct {
 	ArchitecturalGoals  string
 	Principles          []string
 	RefactoringGuidance string
+	CoverageGuidance    string
 }
 
 // FormatViolationsWithContext creates a formatted report with architectural context
@@ -192,16 +193,46 @@ func FormatViolationsWithContext(violations []Violation, errorContext *ErrorCont
 	if errorContext != nil && errorContext.Enabled {
 		sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
 
-		if errorContext.RefactoringGuidance != "" {
+		// Check if there are coverage violations
+		hasCoverageViolations := false
+		hasArchitecturalViolations := false
+		for _, v := range violations {
+			if v.GetType() == "Insufficient Test Coverage" {
+				hasCoverageViolations = true
+			} else {
+				hasArchitecturalViolations = true
+			}
+		}
+
+		// Show refactoring guidance for architectural violations
+		if hasArchitecturalViolations && errorContext.RefactoringGuidance != "" {
 			sb.WriteString("┌─ REFACTORING GUIDANCE ─────────────────────────────────────────────────────────┐\n")
 			sb.WriteString(errorContext.RefactoringGuidance)
 			sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
 		}
 
-		sb.WriteString("💡 TIP: These violations show architectural misalignment, not just linter errors.\n")
-		sb.WriteString("   Focus on understanding WHY the target architecture matters, then refactor\n")
-		sb.WriteString("   accordingly. Don't just move code to make the linter happy - restructure\n")
-		sb.WriteString("   to achieve the architectural goals described above.\n")
+		// Show coverage guidance for coverage violations
+		if hasCoverageViolations && errorContext.CoverageGuidance != "" {
+			sb.WriteString("┌─ TEST COVERAGE GUIDANCE ───────────────────────────────────────────────────────┐\n")
+			sb.WriteString(errorContext.CoverageGuidance)
+			sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
+		}
+
+		// Different tips based on violation types
+		if hasCoverageViolations && hasArchitecturalViolations {
+			sb.WriteString("💡 TIP: Address architectural violations first, then improve test coverage.\n")
+			sb.WriteString("   Good tests verify correct behavior - make sure the architecture is sound\n")
+			sb.WriteString("   before investing in comprehensive test coverage.\n")
+		} else if hasArchitecturalViolations {
+			sb.WriteString("💡 TIP: These violations show architectural misalignment, not just linter errors.\n")
+			sb.WriteString("   Focus on understanding WHY the target architecture matters, then refactor\n")
+			sb.WriteString("   accordingly. Don't just move code to make the linter happy - restructure\n")
+			sb.WriteString("   to achieve the architectural goals described above.\n")
+		} else if hasCoverageViolations {
+			sb.WriteString("💡 TIP: Test coverage ensures your code works correctly and can be refactored safely.\n")
+			sb.WriteString("   Focus on testing critical paths and business logic first. Use coverage\n")
+			sb.WriteString("   reports to identify untested code, then write tests that verify behavior.\n")
+		}
 	}
 
 	return sb.String()
