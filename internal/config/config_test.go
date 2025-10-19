@@ -480,3 +480,178 @@ rules:
 		t.Error("ShouldRunStaticcheck() = true, want false (default)")
 	}
 }
+
+func TestConfig_NewFormat_WithPreset(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := "module example.com/test\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create config in new format with preset and no overrides
+	configYAML := `
+module: example.com/test
+
+preset:
+  name: simple
+  structure:
+    required_directories:
+      cmd: "Commands"
+      pkg: "Public API"
+    allow_other_directories: true
+  rules:
+    directories_import:
+      cmd: [pkg]
+      pkg: [internal]
+    detect_unused: true
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load config
+	cfg, err := config.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Verify preset values are used
+	if cfg.GetPresetUsed() != "simple" {
+		t.Errorf("GetPresetUsed() = %s, want simple", cfg.GetPresetUsed())
+	}
+
+	reqDirs := cfg.GetRequiredDirectories()
+	if reqDirs["cmd"] != "Commands" {
+		t.Errorf("GetRequiredDirectories()[cmd] = %s, want Commands", reqDirs["cmd"])
+	}
+
+	if !cfg.ShouldDetectUnused() {
+		t.Error("ShouldDetectUnused() = false, want true")
+	}
+}
+
+func TestConfig_NewFormat_WithOverrides(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := "module example.com/test\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create config in new format with preset and overrides
+	configYAML := `
+module: example.com/test
+
+preset:
+  name: simple
+  structure:
+    required_directories:
+      cmd: "Commands"
+      pkg: "Public API"
+    allow_other_directories: true
+  rules:
+    directories_import:
+      cmd: [pkg]
+      pkg: [internal]
+    detect_unused: true
+
+overrides:
+  structure:
+    required_directories:
+      scripts: "Build scripts"
+  rules:
+    directories_import:
+      scripts: [pkg]
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load config
+	cfg, err := config.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Verify preset values are used
+	if cfg.GetPresetUsed() != "simple" {
+		t.Errorf("GetPresetUsed() = %s, want simple", cfg.GetPresetUsed())
+	}
+
+	// Verify overrides are merged
+	reqDirs := cfg.GetRequiredDirectories()
+	if reqDirs["cmd"] != "Commands" {
+		t.Errorf("GetRequiredDirectories()[cmd] = %s, want Commands (from preset)", reqDirs["cmd"])
+	}
+	if reqDirs["scripts"] != "Build scripts" {
+		t.Errorf("GetRequiredDirectories()[scripts] = %s, want Build scripts (from override)", reqDirs["scripts"])
+	}
+
+	dirsImport := cfg.GetDirectoriesImport()
+	if len(dirsImport["scripts"]) != 1 || dirsImport["scripts"][0] != "pkg" {
+		t.Errorf("GetDirectoriesImport()[scripts] = %v, want [pkg] (from override)", dirsImport["scripts"])
+	}
+}
+
+func TestConfig_BackwardCompatibility_OldFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := "module example.com/test\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create config in old format (flat structure)
+	configYAML := `
+module: example.com/test
+preset_used: simple
+
+structure:
+  required_directories:
+    cmd: "Commands"
+    pkg: "Public API"
+  allow_other_directories: true
+
+rules:
+  directories_import:
+    cmd: [pkg]
+    pkg: [internal]
+  detect_unused: true
+
+error_prompt:
+  enabled: true
+  architectural_goals: "Old format goals"
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load config
+	cfg, err := config.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Verify old format still works
+	if cfg.GetPresetUsed() != "simple" {
+		t.Errorf("GetPresetUsed() = %s, want simple", cfg.GetPresetUsed())
+	}
+
+	reqDirs := cfg.GetRequiredDirectories()
+	if reqDirs["cmd"] != "Commands" {
+		t.Errorf("GetRequiredDirectories()[cmd] = %s, want Commands", reqDirs["cmd"])
+	}
+
+	if !cfg.ShouldDetectUnused() {
+		t.Error("ShouldDetectUnused() = false, want true")
+	}
+
+	errPrompt := cfg.GetErrorPrompt()
+	if errPrompt.ArchitecturalGoals != "Old format goals" {
+		t.Errorf("GetErrorPrompt().ArchitecturalGoals = %s, want Old format goals", errPrompt.ArchitecturalGoals)
+	}
+}

@@ -1605,9 +1605,12 @@ go 1.21
 
 	content := string(data)
 
-	// Should now have DDD-specific content
-	if !strings.Contains(content, "preset_used: ddd") {
+	// Should now have DDD-specific content (new format with preset section)
+	if !strings.Contains(content, "preset:") && !strings.Contains(content, "preset_used: ddd") {
 		t.Error("config should indicate ddd preset")
+	}
+	if !strings.Contains(content, "name: ddd") && !strings.Contains(content, "preset_used: ddd") {
+		t.Error("config should contain ddd preset name")
 	}
 
 	// Should have error_prompt from ddd
