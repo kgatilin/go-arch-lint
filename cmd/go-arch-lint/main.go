@@ -35,6 +35,7 @@ DEFAULT COMMAND FLAGS:
 
     -staticcheck
         Run staticcheck and include results in output
+        (can also be enabled in .goarchlint with 'staticcheck: true')
 
     -exit-zero
         Always exit with code 0, even if violations are found

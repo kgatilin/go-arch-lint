@@ -387,3 +387,96 @@ rules:
 		t.Errorf("GetSharedExternalImportsMode() = %s, want 'warn' as default", mode)
 	}
 }
+
+func TestConfig_Staticcheck_Enabled(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := "module example.com/test\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create config with staticcheck enabled
+	configYAML := `
+module: example.com/test
+rules:
+  staticcheck: true
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load config
+	cfg, err := config.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Verify staticcheck is enabled
+	if !cfg.ShouldRunStaticcheck() {
+		t.Error("ShouldRunStaticcheck() = false, want true")
+	}
+}
+
+func TestConfig_Staticcheck_Disabled(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := "module example.com/test\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create config with staticcheck explicitly disabled
+	configYAML := `
+module: example.com/test
+rules:
+  staticcheck: false
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load config
+	cfg, err := config.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Verify staticcheck is disabled
+	if cfg.ShouldRunStaticcheck() {
+		t.Error("ShouldRunStaticcheck() = true, want false")
+	}
+}
+
+func TestConfig_Staticcheck_DefaultValue(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create go.mod
+	goMod := "module example.com/test\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create config without staticcheck specified
+	configYAML := `
+module: example.com/test
+rules:
+  detect_unused: true
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load config
+	cfg, err := config.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Verify staticcheck defaults to false
+	if cfg.ShouldRunStaticcheck() {
+		t.Error("ShouldRunStaticcheck() = true, want false (default)")
+	}
+}

@@ -44,6 +44,7 @@ type PresetRules struct {
 	SharedExternalImports PresetSharedExternalImports `yaml:"shared_external_imports"`
 	TestFiles             PresetTestFiles             `yaml:"test_files"`
 	TestCoverage          PresetTestCoverage          `yaml:"test_coverage"`
+	Staticcheck           bool                        `yaml:"staticcheck,omitempty"`
 }
 
 type PresetTestFiles struct {
