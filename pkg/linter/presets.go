@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kgatilin/go-arch-lint/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,42 +24,8 @@ type Preset struct {
 
 // PresetConfig mirrors the config structure for YAML generation
 type PresetConfig struct {
-	Structure PresetStructure           `yaml:"structure"`
-	Rules     PresetRules               `yaml:"rules"`
-}
-
-type PresetStructure struct {
-	RequiredDirectories   map[string]string `yaml:"required_directories"`
-	AllowOtherDirectories bool              `yaml:"allow_other_directories"`
-}
-
-type PresetTestCoverage struct {
-	Enabled           bool               `yaml:"enabled"`
-	Threshold         float64            `yaml:"threshold"`
-	PackageThresholds map[string]float64 `yaml:"package_thresholds,omitempty"`
-}
-
-type PresetRules struct {
-	DirectoriesImport     map[string][]string         `yaml:"directories_import"`
-	DetectUnused          bool                        `yaml:"detect_unused"`
-	SharedExternalImports PresetSharedExternalImports `yaml:"shared_external_imports"`
-	TestFiles             PresetTestFiles             `yaml:"test_files"`
-	TestCoverage          PresetTestCoverage          `yaml:"test_coverage"`
-	Staticcheck           bool                        `yaml:"staticcheck,omitempty"`
-}
-
-type PresetTestFiles struct {
-	Lint            bool     `yaml:"lint"`
-	ExemptImports   []string `yaml:"exempt_imports,omitempty"`
-	Location        string   `yaml:"location,omitempty"`
-	RequireBlackbox bool     `yaml:"require_blackbox"`
-}
-
-type PresetSharedExternalImports struct {
-	Detect            bool     `yaml:"detect"`
-	Mode              string   `yaml:"mode"`
-	Exclusions        []string `yaml:"exclusions,omitempty"`
-	ExclusionPatterns []string `yaml:"exclusion_patterns,omitempty"`
+	Structure config.Structure `yaml:"structure"`
+	Rules     config.Rules     `yaml:"rules"`
 }
 
 // AvailablePresets returns all available presets
@@ -140,7 +107,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 4. If you can't test adequately through the public API, consider whether your API design needs improvement
 `,
 			Config: PresetConfig{
-				Structure: PresetStructure{
+				Structure: config.Structure{
 					RequiredDirectories: map[string]string{
 						"internal/domain": "Core business logic, entities, value objects, domain services",
 						"internal/app":    "Application services, use cases, orchestration",
@@ -149,7 +116,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 					},
 					AllowOtherDirectories: true,
 				},
-				Rules: PresetRules{
+				Rules: config.Rules{
 					DirectoriesImport: map[string][]string{
 						"internal/domain": {},
 						"internal/app":    {"internal/domain"},
@@ -157,7 +124,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 						"cmd":             {"internal/app", "internal/infra"},
 					},
 					DetectUnused: true,
-					SharedExternalImports: PresetSharedExternalImports{
+					SharedExternalImports: config.SharedExternalImports{
 						Detect: true,
 						Mode:   "warn",
 						Exclusions: []string{
@@ -171,7 +138,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 							"encoding/*",
 						},
 					},
-					TestFiles: PresetTestFiles{
+					TestFiles: config.TestFiles{
 						Lint:            true,
 						Location:        "colocated",
 						RequireBlackbox: true,
@@ -182,7 +149,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 							"github.com/stretchr/testify/mock",
 						},
 					},
-					TestCoverage: PresetTestCoverage{
+					TestCoverage: config.TestCoverage{
 						Enabled:   true,
 						Threshold: 75,
 						PackageThresholds: map[string]float64{
@@ -270,7 +237,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 4. If you can't test adequately through the public API, consider whether your API design needs improvement
 `,
 			Config: PresetConfig{
-				Structure: PresetStructure{
+				Structure: config.Structure{
 					RequiredDirectories: map[string]string{
 						"cmd":      "Application entry points",
 						"pkg":      "Public libraries and APIs",
@@ -278,14 +245,14 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 					},
 					AllowOtherDirectories: true,
 				},
-				Rules: PresetRules{
+				Rules: config.Rules{
 					DirectoriesImport: map[string][]string{
 						"cmd":      {"pkg"},
 						"pkg":      {"internal"},
 						"internal": {},
 					},
 					DetectUnused: true,
-					SharedExternalImports: PresetSharedExternalImports{
+					SharedExternalImports: config.SharedExternalImports{
 						Detect: true,
 						Mode:   "warn",
 						Exclusions: []string{
@@ -299,7 +266,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 							"encoding/*",
 						},
 					},
-					TestFiles: PresetTestFiles{
+					TestFiles: config.TestFiles{
 						Lint:            true,
 						Location:        "colocated",
 						RequireBlackbox: true,
@@ -310,7 +277,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 							"github.com/stretchr/testify/mock",
 						},
 					},
-					TestCoverage: PresetTestCoverage{
+					TestCoverage: config.TestCoverage{
 						Enabled:   true,
 						Threshold: 60,
 						PackageThresholds: map[string]float64{
@@ -406,7 +373,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 4. If you can't test adequately through the public API, consider whether your API design needs improvement
 `,
 			Config: PresetConfig{
-				Structure: PresetStructure{
+				Structure: config.Structure{
 					RequiredDirectories: map[string]string{
 						"internal/core":     "Business logic and domain models",
 						"internal/ports":    "Interface definitions (inbound/outbound)",
@@ -415,7 +382,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 					},
 					AllowOtherDirectories: true,
 				},
-				Rules: PresetRules{
+				Rules: config.Rules{
 					DirectoriesImport: map[string][]string{
 						"internal/core":     {},
 						"internal/ports":    {"internal/core"},
@@ -423,7 +390,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 						"cmd":               {"internal/ports", "internal/adapters"},
 					},
 					DetectUnused: true,
-					SharedExternalImports: PresetSharedExternalImports{
+					SharedExternalImports: config.SharedExternalImports{
 						Detect: true,
 						Mode:   "warn",
 						Exclusions: []string{
@@ -437,7 +404,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 							"encoding/*",
 						},
 					},
-					TestFiles: PresetTestFiles{
+					TestFiles: config.TestFiles{
 						Lint:            true,
 						Location:        "colocated",
 						RequireBlackbox: true,
@@ -448,7 +415,7 @@ Blackbox tests (using 'package foo_test' instead of 'package foo') verify behavi
 							"github.com/stretchr/testify/mock",
 						},
 					},
-					TestCoverage: PresetTestCoverage{
+					TestCoverage: config.TestCoverage{
 						Enabled:   true,
 						Threshold: 75,
 						PackageThresholds: map[string]float64{
@@ -489,22 +456,22 @@ func CreateConfigFromPreset(projectPath, presetName string, createDirs bool) err
 
 	// Build new config format with preset and empty overrides sections
 	type PresetSection struct {
-		Name        string              `yaml:"name"`
-		Structure   PresetStructure     `yaml:"structure"`
-		Rules       PresetRules         `yaml:"rules"`
-		ErrorPrompt ErrorPromptConfig   `yaml:"error_prompt"`
+		Name        string             `yaml:"name"`
+		Structure   config.Structure   `yaml:"structure"`
+		Rules       config.Rules       `yaml:"rules"`
+		ErrorPrompt config.ErrorPrompt `yaml:"error_prompt"`
 	}
 
 	type OverridesSection struct {
-		Structure   *PresetStructure    `yaml:"structure,omitempty"`
-		Rules       *PresetRules        `yaml:"rules,omitempty"`
-		ErrorPrompt *ErrorPromptConfig  `yaml:"error_prompt,omitempty"`
+		Structure   *config.Structure   `yaml:"structure,omitempty"`
+		Rules       *config.Rules       `yaml:"rules,omitempty"`
+		ErrorPrompt *config.ErrorPrompt `yaml:"error_prompt,omitempty"`
 	}
 
 	type ConfigFile struct {
-		Module    string            `yaml:"module"`
-		Preset    PresetSection     `yaml:"preset"`
-		Overrides OverridesSection  `yaml:"overrides,omitempty"`
+		Module    string           `yaml:"module"`
+		Preset    PresetSection    `yaml:"preset"`
+		Overrides OverridesSection `yaml:"overrides,omitempty"`
 	}
 
 	configData := ConfigFile{
@@ -513,13 +480,13 @@ func CreateConfigFromPreset(projectPath, presetName string, createDirs bool) err
 			Name:      presetName,
 			Structure: preset.Config.Structure,
 			Rules:     preset.Config.Rules,
-			ErrorPrompt: ErrorPromptConfig{
-				Enabled:                  true,
-				ArchitecturalGoals:       preset.ArchitecturalGoals,
-				Principles:               preset.Principles,
-				RefactoringGuidance:      preset.RefactoringGuidance,
-				CoverageGuidance:         preset.CoverageGuidance,
-				BlackboxTestingGuidance:  preset.BlackboxTestingGuidance,
+			ErrorPrompt: config.ErrorPrompt{
+				Enabled:                 true,
+				ArchitecturalGoals:      preset.ArchitecturalGoals,
+				Principles:              preset.Principles,
+				RefactoringGuidance:     preset.RefactoringGuidance,
+				CoverageGuidance:        preset.CoverageGuidance,
+				BlackboxTestingGuidance: preset.BlackboxTestingGuidance,
 			},
 		},
 		Overrides: OverridesSection{}, // Empty overrides section
@@ -576,16 +543,6 @@ func CreateConfigFromPreset(projectPath, presetName string, createDirs bool) err
 	return nil
 }
 
-// ErrorPromptConfig for YAML serialization
-type ErrorPromptConfig struct {
-	Enabled                  bool     `yaml:"enabled"`
-	ArchitecturalGoals       string   `yaml:"architectural_goals,omitempty"`
-	Principles               []string `yaml:"principles,omitempty"`
-	RefactoringGuidance      string   `yaml:"refactoring_guidance,omitempty"`
-	CoverageGuidance         string   `yaml:"coverage_guidance,omitempty"`
-	BlackboxTestingGuidance  string   `yaml:"blackbox_testing_guidance,omitempty"`
-}
-
 func detectModuleFromGoMod(projectPath string) (string, error) {
 	goModPath := filepath.Join(projectPath, "go.mod")
 	data, err := os.ReadFile(goModPath)
@@ -635,9 +592,9 @@ func RefreshConfigFromPreset(projectPath, presetName string) error {
 		Name string `yaml:"name"`
 	}
 	type OverridesSection struct {
-		Structure   *PresetStructure    `yaml:"structure,omitempty"`
-		Rules       *PresetRules        `yaml:"rules,omitempty"`
-		ErrorPrompt *ErrorPromptConfig  `yaml:"error_prompt,omitempty"`
+		Structure   *config.Structure   `yaml:"structure,omitempty"`
+		Rules       *config.Rules       `yaml:"rules,omitempty"`
+		ErrorPrompt *config.ErrorPrompt `yaml:"error_prompt,omitempty"`
 	}
 	type NewConfigFile struct {
 		Preset    *PresetSection    `yaml:"preset,omitempty"`
@@ -692,15 +649,15 @@ func RefreshConfigFromPreset(projectPath, presetName string) error {
 
 	// Build new config with updated preset and preserved overrides
 	type FinalPresetSection struct {
-		Name        string              `yaml:"name"`
-		Structure   PresetStructure     `yaml:"structure"`
-		Rules       PresetRules         `yaml:"rules"`
-		ErrorPrompt ErrorPromptConfig   `yaml:"error_prompt"`
+		Name        string             `yaml:"name"`
+		Structure   config.Structure   `yaml:"structure"`
+		Rules       config.Rules       `yaml:"rules"`
+		ErrorPrompt config.ErrorPrompt `yaml:"error_prompt"`
 	}
 	type FinalConfigFile struct {
-		Module    string            `yaml:"module"`
-		Preset    FinalPresetSection `yaml:"preset"`
-		Overrides OverridesSection  `yaml:"overrides,omitempty"`
+		Module    string              `yaml:"module"`
+		Preset    FinalPresetSection  `yaml:"preset"`
+		Overrides OverridesSection    `yaml:"overrides,omitempty"`
 	}
 
 	configData := FinalConfigFile{
@@ -709,13 +666,13 @@ func RefreshConfigFromPreset(projectPath, presetName string) error {
 			Name:      presetName,
 			Structure: preset.Config.Structure,
 			Rules:     preset.Config.Rules,
-			ErrorPrompt: ErrorPromptConfig{
-				Enabled:                  true,
-				ArchitecturalGoals:       preset.ArchitecturalGoals,
-				Principles:               preset.Principles,
-				RefactoringGuidance:      preset.RefactoringGuidance,
-				CoverageGuidance:         preset.CoverageGuidance,
-				BlackboxTestingGuidance:  preset.BlackboxTestingGuidance,
+			ErrorPrompt: config.ErrorPrompt{
+				Enabled:                 true,
+				ArchitecturalGoals:      preset.ArchitecturalGoals,
+				Principles:              preset.Principles,
+				RefactoringGuidance:     preset.RefactoringGuidance,
+				CoverageGuidance:        preset.CoverageGuidance,
+				BlackboxTestingGuidance: preset.BlackboxTestingGuidance,
 			},
 		},
 		Overrides: existingOverrides, // Preserve existing overrides
