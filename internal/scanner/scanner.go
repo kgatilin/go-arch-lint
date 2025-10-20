@@ -11,11 +11,21 @@ import (
 	"strings"
 )
 
+// ScanOptions configures what information to include in scan results
+type ScanOptions struct {
+	IncludeImportUsages bool // Include detailed import usage information
+	IncludeExportedAPI  bool // Include exported API declarations
+}
+
+// FileInfo contains information about a scanned Go file
+// Optional fields are populated based on ScanOptions
 type FileInfo struct {
-	Path        string   // Absolute path to the file
-	RelPath     string   // Path relative to project root
-	Package     string   // Package name
-	Imports     []string // Import paths
+	Path          string         // Absolute path to the file
+	RelPath       string         // Path relative to project root
+	Package       string         // Package name
+	Imports       []string       // Import paths
+	ImportUsages  []ImportUsage  // Detailed import usage (nil if not requested)
+	ExportedDecls []ExportedDecl // Exported API declarations (nil if not requested)
 }
 
 // ImportUsage tracks which symbols are used from an import
@@ -34,15 +44,9 @@ func (iu ImportUsage) GetUsedSymbols() []string {
 	return iu.UsedSymbols
 }
 
-// FileInfoDetailed extends FileInfo with detailed usage information
-type FileInfoDetailed struct {
-	FileInfo
-	ImportUsages []ImportUsage
-}
-
 // GetImportUsages returns the import usages
-// This method allows FileInfoDetailed to satisfy interfaces via structural typing
-func (f FileInfoDetailed) GetImportUsages() []ImportUsage {
+// This method allows FileInfo to satisfy interfaces via structural typing
+func (f FileInfo) GetImportUsages() []ImportUsage {
 	return f.ImportUsages
 }
 
@@ -74,23 +78,12 @@ func (e ExportedDecl) GetProperties() []string {
 	return e.Properties
 }
 
-// FileInfoWithAPI extends FileInfo with API information
-type FileInfoWithAPI struct {
-	FileInfo
-	ExportedDecls []ExportedDecl
-}
-
-// GetPackage implements output.FileWithAPI interface
-func (f FileInfoWithAPI) GetPackage() string {
-	return f.Package
-}
-
 // GetRelPath implements graph.FileInfo interface
 func (f FileInfo) GetRelPath() string {
 	return f.RelPath
 }
 
-// GetPackage implements graph.FileInfo interface
+// GetPackage implements graph.FileInfo and output.FileWithAPI interfaces
 func (f FileInfo) GetPackage() string {
 	return f.Package
 }
@@ -116,8 +109,8 @@ func New(projectPath, module string, ignorePaths []string, lintTestFiles bool) *
 	}
 }
 
-// Scan walks the specified paths and parses all Go files
-func (s *Scanner) Scan(scanPaths []string) ([]FileInfo, error) {
+// Scan walks the specified paths and parses all Go files with optional detailed information
+func (s *Scanner) Scan(scanPaths []string, opts ScanOptions) ([]FileInfo, error) {
 	var files []FileInfo
 
 	for _, scanPath := range scanPaths {
@@ -151,7 +144,7 @@ func (s *Scanner) Scan(scanPaths []string) ([]FileInfo, error) {
 				return nil
 			}
 
-			fileInfo, err := s.parseFile(path)
+			fileInfo, err := s.parseFileWithOptions(path, opts)
 			if err != nil {
 				return fmt.Errorf("parsing %s: %w", path, err)
 			}
@@ -168,122 +161,27 @@ func (s *Scanner) Scan(scanPaths []string) ([]FileInfo, error) {
 	return files, nil
 }
 
-// ScanDetailed walks the specified paths and parses all Go files with detailed import usage
-func (s *Scanner) ScanDetailed(scanPaths []string) ([]FileInfoDetailed, error) {
-	var files []FileInfoDetailed
 
-	for _, scanPath := range scanPaths {
-		fullPath := filepath.Join(s.projectPath, scanPath)
-
-		// Check if path exists
-		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-			continue // Skip non-existent paths
-		}
-
-		err := filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-
-			// Skip directories
-			if info.IsDir() {
-				// Check if directory should be ignored
-				if s.shouldIgnore(path) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
-			// Only process .go files
-			if !strings.HasSuffix(path, ".go") {
-				return nil
-			}
-			// Skip test files unless lintTestFiles is enabled
-			if !s.lintTestFiles && strings.HasSuffix(path, "_test.go") {
-				return nil
-			}
-
-			fileInfo, err := s.parseFileDetailed(path)
-			if err != nil {
-				return fmt.Errorf("parsing %s: %w", path, err)
-			}
-
-			files = append(files, fileInfo)
-			return nil
-		})
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return files, nil
-}
-
-// ScanWithAPI walks the specified paths and parses all Go files with API information
-func (s *Scanner) ScanWithAPI(scanPaths []string) ([]FileInfoWithAPI, error) {
-	var files []FileInfoWithAPI
-
-	for _, scanPath := range scanPaths {
-		fullPath := filepath.Join(s.projectPath, scanPath)
-
-		// Check if path exists
-		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-			continue // Skip non-existent paths
-		}
-
-		err := filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-
-			// Skip directories
-			if info.IsDir() {
-				// Check if directory should be ignored
-				if s.shouldIgnore(path) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
-			// Only process .go files
-			if !strings.HasSuffix(path, ".go") {
-				return nil
-			}
-			// Skip test files unless lintTestFiles is enabled
-			if !s.lintTestFiles && strings.HasSuffix(path, "_test.go") {
-				return nil
-			}
-
-			fileInfo, err := s.parseFileWithAPI(path)
-			if err != nil {
-				return fmt.Errorf("parsing %s: %w", path, err)
-			}
-
-			files = append(files, fileInfo)
-			return nil
-		})
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return files, nil
-}
-
-func (s *Scanner) parseFile(path string) (FileInfo, error) {
+// parseFileWithOptions parses a file with optional detailed information based on ScanOptions
+func (s *Scanner) parseFileWithOptions(path string, opts ScanOptions) (FileInfo, error) {
 	relPath, err := filepath.Rel(s.projectPath, path)
 	if err != nil {
 		return FileInfo{}, err
 	}
 
+	// Determine parser mode based on options
+	parserMode := parser.ImportsOnly
+	if opts.IncludeImportUsages || opts.IncludeExportedAPI {
+		parserMode = parser.ParseComments
+	}
+
 	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
+	node, err := parser.ParseFile(fset, path, nil, parserMode)
 	if err != nil {
 		return FileInfo{}, err
 	}
 
+	// Build import list
 	var imports []string
 	for _, imp := range node.Imports {
 		// Remove quotes from import path
@@ -291,12 +189,85 @@ func (s *Scanner) parseFile(path string) (FileInfo, error) {
 		imports = append(imports, importPath)
 	}
 
-	return FileInfo{
+	fileInfo := FileInfo{
 		Path:    path,
 		RelPath: relPath,
 		Package: node.Name.Name,
 		Imports: imports,
-	}, nil
+	}
+
+	// Optionally extract import usages
+	if opts.IncludeImportUsages {
+		fileInfo.ImportUsages = extractImportUsages(node, imports)
+	}
+
+	// Optionally extract exported API
+	if opts.IncludeExportedAPI {
+		fileInfo.ExportedDecls = extractExportedDecls(node)
+	}
+
+	return fileInfo, nil
+}
+
+// extractImportUsages extracts which symbols are used from each import
+func extractImportUsages(node *ast.File, imports []string) []ImportUsage {
+	// Build map of package names to import paths
+	importMap := make(map[string]string) // package name -> import path
+
+	for _, imp := range node.Imports {
+		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // Remove quotes
+
+		// Determine package name (either explicit alias or last segment of import path)
+		var pkgName string
+		if imp.Name != nil {
+			pkgName = imp.Name.Name
+		} else {
+			// Use last segment of import path as package name
+			parts := strings.Split(importPath, "/")
+			pkgName = parts[len(parts)-1]
+		}
+		importMap[pkgName] = importPath
+	}
+
+	// Extract used symbols from each import
+	usageMap := make(map[string]map[string]bool) // import path -> set of used symbols
+	for _, importPath := range imports {
+		usageMap[importPath] = make(map[string]bool)
+	}
+
+	// Walk AST to find selector expressions (e.g., pkg.Function)
+	ast.Inspect(node, func(n ast.Node) bool {
+		if sel, ok := n.(*ast.SelectorExpr); ok {
+			// Check if the selector's X is an identifier (package name)
+			if ident, ok := sel.X.(*ast.Ident); ok {
+				// Look up the import path for this package
+				if importPath, exists := importMap[ident.Name]; exists {
+					// Record the used symbol
+					usageMap[importPath][sel.Sel.Name] = true
+				}
+			}
+		}
+		return true
+	})
+
+	// Convert usage map to ImportUsage slice
+	var importUsages []ImportUsage
+	for importPath, symbols := range usageMap {
+		if len(symbols) > 0 {
+			usedSymbols := make([]string, 0, len(symbols))
+			for symbol := range symbols {
+				usedSymbols = append(usedSymbols, symbol)
+			}
+			// Sort for consistent output
+			sort.Strings(usedSymbols)
+			importUsages = append(importUsages, ImportUsage{
+				ImportPath:  importPath,
+				UsedSymbols: usedSymbols,
+			})
+		}
+	}
+
+	return importUsages
 }
 
 func (s *Scanner) shouldIgnore(path string) bool {
@@ -318,38 +289,6 @@ func (s *Scanner) shouldIgnore(path string) bool {
 	return false
 }
 
-func (s *Scanner) parseFileWithAPI(path string) (FileInfoWithAPI, error) {
-	relPath, err := filepath.Rel(s.projectPath, path)
-	if err != nil {
-		return FileInfoWithAPI{}, err
-	}
-
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
-	if err != nil {
-		return FileInfoWithAPI{}, err
-	}
-
-	var imports []string
-	for _, imp := range node.Imports {
-		// Remove quotes from import path
-		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1]
-		imports = append(imports, importPath)
-	}
-
-	// Extract exported declarations
-	exportedDecls := extractExportedDecls(node)
-
-	return FileInfoWithAPI{
-		FileInfo: FileInfo{
-			Path:    path,
-			RelPath: relPath,
-			Package: node.Name.Name,
-			Imports: imports,
-		},
-		ExportedDecls: exportedDecls,
-	}, nil
-}
 
 func extractExportedDecls(file *ast.File) []ExportedDecl {
 	var decls []ExportedDecl
@@ -515,86 +454,6 @@ func exprToString(expr ast.Expr) string {
 	}
 }
 
-func (s *Scanner) parseFileDetailed(path string) (FileInfoDetailed, error) {
-	relPath, err := filepath.Rel(s.projectPath, path)
-	if err != nil {
-		return FileInfoDetailed{}, err
-	}
-
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
-	if err != nil {
-		return FileInfoDetailed{}, err
-	}
-
-	// Build map of package names to import paths
-	importMap := make(map[string]string) // package name -> import path
-	var imports []string
-
-	for _, imp := range node.Imports {
-		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // Remove quotes
-		imports = append(imports, importPath)
-
-		// Determine package name (either explicit alias or last segment of import path)
-		var pkgName string
-		if imp.Name != nil {
-			pkgName = imp.Name.Name
-		} else {
-			// Use last segment of import path as package name
-			parts := strings.Split(importPath, "/")
-			pkgName = parts[len(parts)-1]
-		}
-		importMap[pkgName] = importPath
-	}
-
-	// Extract used symbols from each import
-	usageMap := make(map[string]map[string]bool) // import path -> set of used symbols
-	for _, importPath := range imports {
-		usageMap[importPath] = make(map[string]bool)
-	}
-
-	// Walk AST to find selector expressions (e.g., pkg.Function)
-	ast.Inspect(node, func(n ast.Node) bool {
-		if sel, ok := n.(*ast.SelectorExpr); ok {
-			// Check if the selector's X is an identifier (package name)
-			if ident, ok := sel.X.(*ast.Ident); ok {
-				// Look up the import path for this package
-				if importPath, exists := importMap[ident.Name]; exists {
-					// Record the used symbol
-					usageMap[importPath][sel.Sel.Name] = true
-				}
-			}
-		}
-		return true
-	})
-
-	// Convert usage map to ImportUsage slice
-	var importUsages []ImportUsage
-	for importPath, symbols := range usageMap {
-		if len(symbols) > 0 {
-			usedSymbols := make([]string, 0, len(symbols))
-			for symbol := range symbols {
-				usedSymbols = append(usedSymbols, symbol)
-			}
-			// Sort for consistent output
-			sort.Strings(usedSymbols)
-			importUsages = append(importUsages, ImportUsage{
-				ImportPath:  importPath,
-				UsedSymbols: usedSymbols,
-			})
-		}
-	}
-
-	return FileInfoDetailed{
-		FileInfo: FileInfo{
-			Path:    path,
-			RelPath: relPath,
-			Package: node.Name.Name,
-			Imports: imports,
-		},
-		ImportUsages: importUsages,
-	}, nil
-}
 
 func extractStructFields(typeExpr ast.Expr) []string {
 	var fields []string
