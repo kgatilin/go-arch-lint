@@ -82,17 +82,13 @@ For complex architectural changes, new features with design implications, or amb
 
 ## Documentation System
 
-### Index (`docs/arch-index.md`)
+### Index (`@docs/arch-index.md`)
 - Lightweight (~2-5 KB), loaded by default
 - Quick reference, architecture summary, package directory, key exports, statistics
 
-### Full (`docs/arch-generated.md`)
-- Comprehensive (~50-100+ KB), on-demand
-- Complete dependency graph, full API signatures, all violations, used symbols
-
 ### Generation
 ```bash
-./go-arch-lint docs   # Generates both arch-index.md and arch-generated.md
+./go-arch-lint docs   # Generates arch-index.md
 ```
 
 ## Junior Developer Agent Usage
