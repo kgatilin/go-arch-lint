@@ -139,6 +139,7 @@ func TestGenerateIndexDocumentation_HasRequiredSections(t *testing.T) {
 		"## Quick Reference",
 		"## Architecture Summary",
 		"## Architectural Rules",
+		"## Dependency Graph",
 		"## Package Directory",
 		"## Agent Guidance",
 		"## Statistics",
@@ -556,5 +557,204 @@ func TestGenerateIndexDocumentation_LayerOrganization(t *testing.T) {
 	} else if cmdIdx > 0 && pkgIdx > 0 && internalIdx > 0 {
 		// At least all present, order may vary - just warn
 		t.Log("Note: Layer ordering may not match expectation (cmd, pkg, internal)")
+	}
+}
+
+func TestGenerateIndexDocumentation_ContainsDependencyGraph(t *testing.T) {
+	graph := &testGraphForIndex{
+		nodes: []output.FileNode{
+			&testFileNodeForIndex{
+				relPath: "cmd/main.go",
+				pkgName: "main",
+				dependencies: []output.Dependency{
+					&testDependencyForIndex{
+						importPath: "github.com/kgatilin/go-arch-lint/pkg/linter",
+						isLocal:    true,
+						localPath:  "pkg/linter",
+					},
+					&testDependencyForIndex{
+						importPath: "fmt",
+						isLocal:    false,
+					},
+				},
+			},
+			&testFileNodeForIndex{
+				relPath: "pkg/linter/linter.go",
+				pkgName: "linter",
+				dependencies: []output.Dependency{
+					&testDependencyForIndex{
+						importPath: "github.com/kgatilin/go-arch-lint/internal/config",
+						isLocal:    true,
+						localPath:  "internal/config",
+					},
+					&testDependencyForIndex{
+						importPath: "github.com/kgatilin/go-arch-lint/internal/scanner",
+						isLocal:    true,
+						localPath:  "internal/scanner",
+					},
+					&testDependencyForIndex{
+						importPath: "gopkg.in/yaml.v3",
+						isLocal:    false,
+					},
+				},
+			},
+			&testFileNodeForIndex{
+				relPath: "internal/config/config.go",
+				pkgName: "config",
+				dependencies: []output.Dependency{
+					&testDependencyForIndex{
+						importPath: "os",
+						isLocal:    false,
+					},
+				},
+			},
+			&testFileNodeForIndex{
+				relPath: "internal/scanner/scanner.go",
+				pkgName: "scanner",
+				dependencies: []output.Dependency{},
+			},
+		},
+	}
+
+	files := []output.FileWithAPI{}
+
+	doc := output.FullDocumentation{
+		Structure: output.StructureInfo{
+			RequiredDirectories: map[string]string{
+				"cmd":      "Entry points",
+				"pkg":      "Public API",
+				"internal": "Isolated primitives",
+			},
+			ExistingDirs: map[string]bool{
+				"cmd":      true,
+				"pkg":      true,
+				"internal": true,
+			},
+		},
+		Rules: output.RulesInfo{
+			DirectoriesImport: map[string][]string{
+				"cmd":      {"pkg"},
+				"pkg":      {"internal"},
+				"internal": {},
+			},
+		},
+		Graph:          graph,
+		Files:          files,
+		ViolationCount: 0,
+		FileCount:      4,
+		PackageCount:   4,
+	}
+
+	result := output.GenerateIndexDocumentation(doc)
+
+	// Verify dependency graph section exists
+	graphSectionStart := strings.Index(result, "## Dependency Graph")
+	if graphSectionStart == -1 {
+		t.Fatal("Missing Dependency Graph section")
+	}
+
+	// Find the end of the dependency graph section (next ## section)
+	graphSectionEnd := strings.Index(result[graphSectionStart+20:], "## ")
+	if graphSectionEnd == -1 {
+		graphSectionEnd = len(result)
+	} else {
+		graphSectionEnd += graphSectionStart + 20
+	}
+
+	graphSection := result[graphSectionStart:graphSectionEnd]
+
+	// Verify package-level dependencies are shown in the graph section
+	if !strings.Contains(graphSection, "cmd") {
+		t.Error("Expected cmd package in dependency graph")
+	}
+	if !strings.Contains(graphSection, "pkg/linter") {
+		t.Error("Expected pkg/linter package in dependency graph")
+	}
+
+	// Verify local dependencies are shown (cmd → pkg/linter)
+	// Check that cmd's dependencies include pkg/linter
+	cmdStart := strings.Index(graphSection, "- **cmd**")
+	if cmdStart == -1 {
+		t.Fatal("Could not find cmd in dependency graph section")
+	}
+	// Find the next package entry (or end of section)
+	nextEntry := strings.Index(graphSection[cmdStart+20:], "- **")
+	searchEnd := len(graphSection)
+	if nextEntry != -1 {
+		searchEnd = cmdStart + 20 + nextEntry
+	}
+	cmdSection := graphSection[cmdStart:searchEnd]
+	if !strings.Contains(cmdSection, "pkg/linter") {
+		t.Errorf("Expected cmd to depend on pkg/linter\nGot section: %s", cmdSection)
+	}
+
+	// Verify pkg/linter dependencies (should have internal/config, internal/scanner)
+	pkgStart := strings.Index(graphSection, "- **pkg/linter**")
+	if pkgStart == -1 {
+		t.Fatal("Could not find pkg/linter in dependency graph section")
+	}
+	nextEntry = strings.Index(graphSection[pkgStart+30:], "- **")
+	searchEnd = len(graphSection)
+	if nextEntry != -1 {
+		searchEnd = pkgStart + 30 + nextEntry
+	}
+	pkgSection := graphSection[pkgStart:searchEnd]
+	if !strings.Contains(pkgSection, "internal/config") || !strings.Contains(pkgSection, "internal/scanner") {
+		t.Errorf("Expected pkg/linter to depend on internal/config and internal/scanner\nGot section: %s", pkgSection)
+	}
+
+	// Verify packages with no local dependencies show "(no local dependencies)"
+	internalConfigStart := strings.Index(graphSection, "- **internal/config**")
+	if internalConfigStart != -1 {
+		nextEntry = strings.Index(graphSection[internalConfigStart+30:], "- **")
+		searchEnd = len(graphSection)
+		if nextEntry != -1 {
+			searchEnd = internalConfigStart + 30 + nextEntry
+		}
+		configSection := graphSection[internalConfigStart:searchEnd]
+		if !strings.Contains(configSection, "no local dependencies") {
+			t.Errorf("Expected internal/config to show no local dependencies\nGot section: %s", configSection)
+		}
+	}
+}
+
+func TestGenerateIndexDocumentation_DependencyGraphHandlesEmptyGraph(t *testing.T) {
+	graph := &testGraphForIndex{
+		nodes: []output.FileNode{},
+	}
+
+	files := []output.FileWithAPI{}
+
+	doc := output.FullDocumentation{
+		Structure: output.StructureInfo{
+			RequiredDirectories: map[string]string{
+				"cmd": "Entry points",
+			},
+			ExistingDirs: map[string]bool{
+				"cmd": true,
+			},
+		},
+		Rules: output.RulesInfo{
+			DirectoriesImport: map[string][]string{
+				"cmd": {},
+			},
+		},
+		Graph:          graph,
+		Files:          files,
+		ViolationCount: 0,
+		FileCount:      0,
+		PackageCount:   0,
+	}
+
+	result := output.GenerateIndexDocumentation(doc)
+
+	// Verify dependency graph section still exists
+	if !strings.Contains(result, "## Dependency Graph") {
+		t.Error("Missing Dependency Graph section even with empty graph")
+	}
+
+	// Should show "No packages found" or similar
+	if !strings.Contains(result, "No packages found") {
+		t.Error("Expected message about no packages found in empty graph")
 	}
 }

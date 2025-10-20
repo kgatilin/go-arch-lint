@@ -76,6 +76,37 @@ func GenerateIndexDocumentation(doc FullDocumentation) string {
 		sb.WriteString("**Strict Mode**: Only required directories are allowed\n\n")
 	}
 
+	// Dependency Graph (package-level, non-detailed)
+	sb.WriteString("## Dependency Graph\n\n")
+	sb.WriteString("Package-level dependencies (local dependencies only):\n\n")
+
+	pkgDeps := buildPackageDependencies(doc.Graph)
+
+	// Sort package names for consistent output
+	pkgNames := make([]string, 0, len(pkgDeps))
+	for pkgPath := range pkgDeps {
+		pkgNames = append(pkgNames, pkgPath)
+	}
+	sort.Strings(pkgNames)
+
+	if len(pkgNames) == 0 {
+		sb.WriteString("*No packages found*\n\n")
+	} else {
+		for _, pkgPath := range pkgNames {
+			deps := pkgDeps[pkgPath]
+			if len(deps.LocalDeps) == 0 {
+				sb.WriteString(fmt.Sprintf("- **%s** → *(no local dependencies)*\n", pkgPath))
+			} else {
+				// Sort dependencies for consistent output
+				sortedDeps := make([]string, len(deps.LocalDeps))
+				copy(sortedDeps, deps.LocalDeps)
+				sort.Strings(sortedDeps)
+				sb.WriteString(fmt.Sprintf("- **%s** → %s\n", pkgPath, strings.Join(sortedDeps, ", ")))
+			}
+		}
+		sb.WriteString("\n")
+	}
+
 	// Build package index by layer
 	packagesByLayer := buildPackagesByLayer(doc.Files)
 
@@ -257,4 +288,81 @@ func formatPackageEntry(sb *strings.Builder, pkg PackageIndexInfo) {
 	sb.WriteString(fmt.Sprintf("  - **Details**: `go-arch-lint -format=package %s`\n", pkg.Path))
 
 	sb.WriteString("\n")
+}
+
+// PackageDependencies holds dependency information for a package
+type PackageDependencies struct {
+	LocalDeps    []string // Local package dependencies (deduplicated)
+	ExternalDeps []string // External dependencies (deduplicated)
+}
+
+// buildPackageDependencies creates a package-level dependency map from the graph
+func buildPackageDependencies(graph Graph) map[string]PackageDependencies {
+	// Map package path to its dependencies
+	pkgDepsMap := make(map[string]map[string]bool) // package -> set of local deps
+	pkgExternalMap := make(map[string]map[string]bool) // package -> set of external deps
+
+	// Process all file nodes
+	for _, node := range graph.GetNodes() {
+		pkgPath := extractPackagePath(node.GetRelPath())
+		if pkgPath == "" {
+			continue
+		}
+
+		// Initialize maps if needed
+		if pkgDepsMap[pkgPath] == nil {
+			pkgDepsMap[pkgPath] = make(map[string]bool)
+		}
+		if pkgExternalMap[pkgPath] == nil {
+			pkgExternalMap[pkgPath] = make(map[string]bool)
+		}
+
+		// Collect dependencies from this file
+		for _, dep := range node.GetDependencies() {
+			if dep.IsLocalDep() {
+				depPkgPath := dep.GetLocalPath()
+				// Don't add self-dependencies
+				if depPkgPath != pkgPath {
+					pkgDepsMap[pkgPath][depPkgPath] = true
+				}
+			} else if !isStdLib(dep.GetImportPath()) {
+				pkgExternalMap[pkgPath][dep.GetImportPath()] = true
+			}
+		}
+	}
+
+	// Convert to final format
+	result := make(map[string]PackageDependencies)
+	for pkgPath, depsSet := range pkgDepsMap {
+		deps := PackageDependencies{
+			LocalDeps:    make([]string, 0, len(depsSet)),
+			ExternalDeps: make([]string, 0),
+		}
+
+		// Convert set to slice
+		for dep := range depsSet {
+			deps.LocalDeps = append(deps.LocalDeps, dep)
+		}
+
+		// Add external deps if any
+		if externalSet, exists := pkgExternalMap[pkgPath]; exists {
+			for extDep := range externalSet {
+				deps.ExternalDeps = append(deps.ExternalDeps, extDep)
+			}
+		}
+
+		result[pkgPath] = deps
+	}
+
+	return result
+}
+
+// extractPackagePath extracts the package directory path from a file path
+// e.g., "pkg/linter/linter.go" → "pkg/linter"
+// e.g., "main.go" → "."
+func extractPackagePath(filePath string) string {
+	if idx := strings.LastIndex(filePath, "/"); idx >= 0 {
+		return filePath[:idx]
+	}
+	return "."
 }
