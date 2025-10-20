@@ -34,7 +34,7 @@ func Hello() {
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.Scan([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
 	}
@@ -94,7 +94,7 @@ import "fmt"
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", []string{"vendor"}, false)
-	files, err := s.Scan([]string{"pkg", "vendor"})
+	files, err := s.Scan([]string{"pkg", "vendor"}, scanner.ScanOptions{})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
 	}
@@ -133,7 +133,7 @@ import "testing"
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.Scan([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestScan_NonExistentPath(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.Scan([]string{"nonexistent"})
+	files, err := s.Scan([]string{"nonexistent"}, scanner.ScanOptions{})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
 	}
@@ -213,7 +213,7 @@ var internal = 10
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.ScanWithAPI([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{IncludeExportedAPI: true})
 	if err != nil {
 		t.Fatalf("ScanWithAPI failed: %v", err)
 	}
@@ -301,7 +301,7 @@ const Version = "1.0"
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.ScanWithAPI([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{IncludeExportedAPI: true})
 	if err != nil {
 		t.Fatalf("ScanWithAPI failed: %v", err)
 	}
@@ -372,7 +372,7 @@ func (*Handler) Handle() {}
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.ScanWithAPI([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{IncludeExportedAPI: true})
 	if err != nil {
 		t.Fatalf("ScanWithAPI failed: %v", err)
 	}
@@ -422,7 +422,7 @@ import "testing"
 
 	// Scan with lintTestFiles=true
 	s := scanner.New(tmpDir, "github.com/test/project", nil, true)
-	files, err := s.Scan([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
 	}
@@ -478,7 +478,7 @@ import "testing"
 
 	// Scan with lintTestFiles=false
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.Scan([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
 	}
@@ -522,7 +522,7 @@ func Process(ctx context.Context) {
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.ScanDetailed([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{IncludeImportUsages: true})
 	if err != nil {
 		t.Fatalf("ScanDetailed failed: %v", err)
 	}
@@ -607,7 +607,7 @@ func TestScanDetailed_NonExistentPath(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.ScanDetailed([]string{"nonexistent"})
+	files, err := s.Scan([]string{"nonexistent"}, scanner.ScanOptions{IncludeImportUsages: true})
 	if err != nil {
 		t.Fatalf("ScanDetailed failed: %v", err)
 	}
@@ -643,7 +643,7 @@ func TestSomething(t *testing.T) {
 
 	// With lintTestFiles=true
 	s := scanner.New(tmpDir, "github.com/test/project", nil, true)
-	files, err := s.ScanDetailed([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{IncludeImportUsages: true})
 	if err != nil {
 		t.Fatalf("ScanDetailed failed: %v", err)
 	}
@@ -700,7 +700,7 @@ func Hello() {
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.Scan([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
 	}
@@ -760,7 +760,7 @@ type Empty struct{}
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.ScanWithAPI([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{IncludeExportedAPI: true})
 	if err != nil {
 		t.Fatalf("ScanWithAPI failed: %v", err)
 	}
@@ -840,7 +840,7 @@ type Extended struct {
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.ScanWithAPI([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{IncludeExportedAPI: true})
 	if err != nil {
 		t.Fatalf("ScanWithAPI failed: %v", err)
 	}
@@ -911,7 +911,7 @@ func Process() {
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	files, err := s.ScanDetailed([]string{"pkg"})
+	files, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{IncludeImportUsages: true})
 	if err != nil {
 		t.Fatalf("ScanDetailed failed: %v", err)
 	}
@@ -972,7 +972,7 @@ func TestScan_ErrorHandlingForInvalidPath(t *testing.T) {
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	_, err := s.Scan([]string{"pkg"})
+	_, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{})
 
 	// Should return error for invalid Go file
 	if err == nil {
@@ -997,7 +997,7 @@ func Invalid( {  // unclosed parenthesis
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	_, err := s.ScanWithAPI([]string{"pkg"})
+	_, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{IncludeExportedAPI: true})
 
 	// Should return error for invalid Go file
 	if err == nil {
@@ -1023,7 +1023,7 @@ func ( { // invalid
 	}
 
 	s := scanner.New(tmpDir, "github.com/test/project", nil, false)
-	_, err := s.ScanDetailed([]string{"pkg"})
+	_, err := s.Scan([]string{"pkg"}, scanner.ScanOptions{IncludeImportUsages: true})
 
 	// Should return error for invalid Go file
 	if err == nil {

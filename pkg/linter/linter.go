@@ -132,9 +132,9 @@ func (ofna *outputFileNodeAdapter) GetDependencies() []output.Dependency {
 	return deps
 }
 
-// fileWithAPIAdapter adapts scanner.FileInfoWithAPI to output.FileWithAPI interface
+// fileWithAPIAdapter adapts scanner.FileInfo to output.FileWithAPI interface
 type fileWithAPIAdapter struct {
-	file *scanner.FileInfoWithAPI
+	file *scanner.FileInfo
 }
 
 func (fwa *fileWithAPIAdapter) GetRelPath() string {
@@ -169,13 +169,13 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool, 
 		}
 
 		s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths, cfg.ShouldLintTestFiles())
-		filesWithAPI, err := s.ScanWithAPI(cfg.ScanPaths)
+		filesWithAPI, err := s.Scan(cfg.ScanPaths, scanner.ScanOptions{IncludeExportedAPI: true})
 		if err != nil {
 			return "", "", false, err
 		}
 
 		// Filter files to only those in the specified package directory
-		packageFiles := []scanner.FileInfoWithAPI{}
+		packageFiles := []scanner.FileInfo{}
 		for _, file := range filesWithAPI {
 			// Extract directory from file path
 			fileDir := file.RelPath
@@ -199,7 +199,7 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool, 
 		}
 
 		// Build graph to get dependencies for this package
-		files, err := s.Scan(cfg.ScanPaths)
+		files, err := s.Scan(cfg.ScanPaths, scanner.ScanOptions{})
 		if err != nil {
 			return "", "", false, err
 		}
@@ -271,7 +271,7 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool, 
 	// Handle API format separately
 	if format == "api" {
 		s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths, cfg.ShouldLintTestFiles())
-		filesWithAPI, err := s.ScanWithAPI(cfg.ScanPaths)
+		filesWithAPI, err := s.Scan(cfg.ScanPaths, scanner.ScanOptions{IncludeExportedAPI: true})
 		if err != nil {
 			return "", "", false, err
 		}
@@ -289,7 +289,7 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool, 
 	// Handle index format separately
 	if format == "index" {
 		s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths, cfg.ShouldLintTestFiles())
-		filesWithAPI, err := s.ScanWithAPI(cfg.ScanPaths)
+		filesWithAPI, err := s.Scan(cfg.ScanPaths, scanner.ScanOptions{IncludeExportedAPI: true})
 		if err != nil {
 			return "", "", false, err
 		}
@@ -301,7 +301,7 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool, 
 		}
 
 		// Build a minimal graph just for statistics
-		files, err := s.Scan(cfg.ScanPaths)
+		files, err := s.Scan(cfg.ScanPaths, scanner.ScanOptions{})
 		if err != nil {
 			return "", "", false, err
 		}
@@ -358,7 +358,7 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool, 
 
 	if detailed {
 		// Scan with detailed symbol tracking
-		detailedFiles, err := s.ScanDetailed(cfg.ScanPaths)
+		detailedFiles, err := s.Scan(cfg.ScanPaths, scanner.ScanOptions{IncludeImportUsages: true})
 		if err != nil {
 			return "", "", false, err
 		}
@@ -366,7 +366,7 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool, 
 		// Convert to graph.FileInfo interface
 		graphFiles := make([]graph.FileInfo, len(detailedFiles))
 		for i := range detailedFiles {
-			graphFiles[i] = detailedFiles[i].FileInfo
+			graphFiles[i] = detailedFiles[i]
 		}
 
 		// Build usage map: file RelPath -> (import path -> used symbols)
@@ -376,14 +376,14 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool, 
 			for _, usage := range file.ImportUsages {
 				fileUsageMap[usage.ImportPath] = usage.UsedSymbols
 			}
-			usageMap[file.FileInfo.RelPath] = fileUsageMap
+			usageMap[file.RelPath] = fileUsageMap
 		}
 
 		// Build detailed dependency graph
 		g = graph.BuildDetailed(graphFiles, cfg.Module, usageMap)
 	} else {
 		// Standard scan
-		files, err := s.Scan(cfg.ScanPaths)
+		files, err := s.Scan(cfg.ScanPaths, scanner.ScanOptions{})
 		if err != nil {
 			return "", "", false, err
 		}
@@ -496,10 +496,10 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool, 
 func generateFullDocumentation(projectPath string, cfg *config.Config, g *graph.Graph, violations []validator.Violation) string {
 	// Scan for public API
 	s := scanner.New(projectPath, cfg.Module, cfg.IgnorePaths, cfg.ShouldLintTestFiles())
-	filesWithAPI, err := s.ScanWithAPI(cfg.ScanPaths)
+	filesWithAPI, err := s.Scan(cfg.ScanPaths, scanner.ScanOptions{IncludeExportedAPI: true})
 	if err != nil {
 		// Fallback to empty API if scan fails
-		filesWithAPI = []scanner.FileInfoWithAPI{}
+		filesWithAPI = []scanner.FileInfo{}
 	}
 
 	// Convert to output.FileWithAPI interface
