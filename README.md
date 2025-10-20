@@ -242,6 +242,42 @@ This strict configuration requires using the adapter pattern in `pkg/` to bridge
 
 If no `.goarchlint` file is found, default rules are used.
 
+### Overriding Hardcoded Checks with Explicit Rules
+
+go-arch-lint provides **opinionated hardcoded checks** to enforce common architectural patterns:
+- **ViolationPkgToPkg**: `pkg/` packages can't import other `pkg/` packages (except direct subpackages)
+- **ViolationCrossCmd**: `cmd/` packages can't import other `cmd/` packages
+- **ViolationSkipLevel**: Can't skip import levels (e.g., `pkg/A` importing `pkg/A/B/C` instead of `pkg/A/B`)
+
+However, you can **override these checks** using explicit `directories_import` rules when you have a legitimate architectural pattern:
+
+```yaml
+rules:
+  directories_import:
+    # Plugin SDK pattern: Allow plugins to import shared SDK
+    pkg/plugins/claude_code:
+      - pkg/pluginsdk
+    pkg/plugins/other:
+      - pkg/pluginsdk
+
+    # Or use top-level rule to allow pkg-to-pkg for specific packages
+    pkg:
+      - pkg/common    # Allow all pkg packages to import pkg/common
+      - internal
+```
+
+**How it works:**
+- When an explicit `directories_import` rule exists for a directory, imports matching that rule bypass the hardcoded checks
+- This enables legitimate patterns like **shared SDK packages** or **common utility packages**
+- Without explicit rules, hardcoded checks remain active (preserving strict defaults)
+
+**Example use case:** Plugin architecture where `pkg/pluginsdk` provides a stable public API that multiple plugin packages need to import. The SDK package serves as a stability boundary and interface contract.
+
+**Best practices:**
+- Use explicit overrides sparingly and document why each exception exists
+- Consider whether refactoring to `internal/` packages with adapters would be cleaner
+- Verify that overrides serve a genuine architectural pattern, not just convenience
+
 ### Shared External Imports Detection
 
 Detects when multiple architectural layers import the same external package (non-stdlib, non-local), which often indicates responsibility duplication or architectural violations.

@@ -1373,3 +1373,231 @@ func TestSetCoverageResults(t *testing.T) {
 	violations := v.Validate()
 	_ = violations // use it to avoid unused variable warning
 }
+
+// TestValidate_PkgToPkgViolation_ExplicitlyAllowed tests that an explicit directories_import
+// rule overrides the hardcoded pkg-to-pkg restriction
+func TestValidate_PkgToPkgViolation_ExplicitlyAllowed(t *testing.T) {
+	// Simulates: pkg/plugins/claude_code imports pkg/pluginsdk
+	// This would normally violate the pkg-to-pkg rule, but is explicitly allowed
+	g := &testGraph{
+		nodes: []validator.FileNode{
+			&testFileNode{
+				relPath: "pkg/plugins/claude_code/commands.go",
+				pkg:     "claude_code",
+				dependencies: []validator.Dependency{
+					&testDependency{
+						importPath: "github.com/test/project/pkg/pluginsdk",
+						localPath:  "pkg/pluginsdk",
+						isLocal:    true,
+					},
+				},
+			},
+			&testFileNode{
+				relPath:      "pkg/pluginsdk/plugin.go",
+				pkg:          "pluginsdk",
+				dependencies: []validator.Dependency{},
+			},
+		},
+	}
+
+	cfg := &testConfig{
+		module: "github.com/test/project",
+		directoriesImport: map[string][]string{
+			"pkg/plugins/claude_code": {"pkg/pluginsdk"}, // Explicitly allow this import
+		},
+		detectUnused: false,
+	}
+
+	v := validator.New(cfg, g)
+	violations := v.Validate()
+
+	// Should NOT have ViolationPkgToPkg because it's explicitly allowed
+	for _, viol := range violations {
+		if viol.Type == validator.ViolationPkgToPkg {
+			t.Errorf("expected no ViolationPkgToPkg (should be overridden by explicit rule), got: %+v", viol)
+		}
+	}
+}
+
+// TestValidate_PkgToPkgViolation_ExplicitlyAllowed_TopLevelRule tests that a top-level
+// directories_import rule (e.g., "pkg") can override the pkg-to-pkg restriction
+func TestValidate_PkgToPkgViolation_ExplicitlyAllowed_TopLevelRule(t *testing.T) {
+	// pkg/http imports pkg/database, allowed by top-level "pkg" rule
+	g := &testGraph{
+		nodes: []validator.FileNode{
+			&testFileNode{
+				relPath: "pkg/http/server.go",
+				pkg:     "http",
+				dependencies: []validator.Dependency{
+					&testDependency{
+						importPath: "github.com/test/project/pkg/database",
+						localPath:  "pkg/database",
+						isLocal:    true,
+					},
+				},
+			},
+			&testFileNode{
+				relPath:      "pkg/database/db.go",
+				pkg:          "database",
+				dependencies: []validator.Dependency{},
+			},
+		},
+	}
+
+	cfg := &testConfig{
+		module: "github.com/test/project",
+		directoriesImport: map[string][]string{
+			"pkg": {"pkg/database", "internal"}, // Top-level rule allows pkg/database
+		},
+		detectUnused: false,
+	}
+
+	v := validator.New(cfg, g)
+	violations := v.Validate()
+
+	// Should NOT have ViolationPkgToPkg because top-level rule allows it
+	for _, viol := range violations {
+		if viol.Type == validator.ViolationPkgToPkg {
+			t.Errorf("expected no ViolationPkgToPkg (should be overridden by top-level rule), got: %+v", viol)
+		}
+	}
+}
+
+// TestValidate_PkgToPkgViolation_StillEnforced_WithoutExplicitRule tests that
+// the pkg-to-pkg restriction still applies when there's NO explicit rule
+func TestValidate_PkgToPkgViolation_StillEnforced_WithoutExplicitRule(t *testing.T) {
+	// pkg/http imports pkg/database, but NO explicit rule allowing it
+	g := &testGraph{
+		nodes: []validator.FileNode{
+			&testFileNode{
+				relPath: "pkg/http/server.go",
+				pkg:     "http",
+				dependencies: []validator.Dependency{
+					&testDependency{
+						importPath: "github.com/test/project/pkg/database",
+						localPath:  "pkg/database",
+						isLocal:    true,
+					},
+				},
+			},
+			&testFileNode{
+				relPath:      "pkg/database/db.go",
+				pkg:          "database",
+				dependencies: []validator.Dependency{},
+			},
+		},
+	}
+
+	cfg := &testConfig{
+		module: "github.com/test/project",
+		directoriesImport: map[string][]string{
+			"pkg": {"internal"}, // Only allows internal, NOT pkg/database
+		},
+		detectUnused: false,
+	}
+
+	v := validator.New(cfg, g)
+	violations := v.Validate()
+
+	// Should have BOTH ViolationPkgToPkg (hardcoded check) AND ViolationForbidden (explicit rule)
+	foundPkgToPkg := false
+	for _, viol := range violations {
+		if viol.Type == validator.ViolationPkgToPkg {
+			foundPkgToPkg = true
+		}
+	}
+
+	if !foundPkgToPkg {
+		t.Error("expected ViolationPkgToPkg to still be enforced when import is not explicitly allowed")
+	}
+}
+
+// TestValidate_CrossCmdViolation_ExplicitlyAllowed tests that an explicit
+// directories_import rule can override the hardcoded cross-cmd restriction
+func TestValidate_CrossCmdViolation_ExplicitlyAllowed(t *testing.T) {
+	// cmd/cli imports cmd/server, which is normally forbidden
+	// But explicitly allowed via directories_import
+	g := &testGraph{
+		nodes: []validator.FileNode{
+			&testFileNode{
+				relPath: "cmd/cli/main.go",
+				pkg:     "main",
+				dependencies: []validator.Dependency{
+					&testDependency{
+						importPath: "github.com/test/project/cmd/server",
+						localPath:  "cmd/server",
+						isLocal:    true,
+					},
+				},
+			},
+			&testFileNode{
+				relPath:      "cmd/server/main.go",
+				pkg:          "main",
+				dependencies: []validator.Dependency{},
+			},
+		},
+	}
+
+	cfg := &testConfig{
+		module: "github.com/test/project",
+		directoriesImport: map[string][]string{
+			"cmd/cli": {"cmd/server"}, // Explicitly allow cross-cmd import
+		},
+		detectUnused: false,
+	}
+
+	v := validator.New(cfg, g)
+	violations := v.Validate()
+
+	// Should NOT have ViolationCrossCmd because it's explicitly allowed
+	for _, viol := range violations {
+		if viol.Type == validator.ViolationCrossCmd {
+			t.Errorf("expected no ViolationCrossCmd (should be overridden by explicit rule), got: %+v", viol)
+		}
+	}
+}
+
+// TestValidate_SkipLevelViolation_ExplicitlyAllowed tests that an explicit
+// directories_import rule can override the hardcoded skip-level restriction
+func TestValidate_SkipLevelViolation_ExplicitlyAllowed(t *testing.T) {
+	// pkg/orders imports pkg/orders/models/entities (skip-level)
+	// Normally forbidden, but explicitly allowed
+	g := &testGraph{
+		nodes: []validator.FileNode{
+			&testFileNode{
+				relPath: "pkg/orders/service.go",
+				pkg:     "orders",
+				dependencies: []validator.Dependency{
+					&testDependency{
+						importPath: "github.com/test/project/pkg/orders/models/entities",
+						localPath:  "pkg/orders/models/entities",
+						isLocal:    true,
+					},
+				},
+			},
+			&testFileNode{
+				relPath:      "pkg/orders/models/entities/order.go",
+				pkg:          "entities",
+				dependencies: []validator.Dependency{},
+			},
+		},
+	}
+
+	cfg := &testConfig{
+		module: "github.com/test/project",
+		directoriesImport: map[string][]string{
+			"pkg/orders": {"pkg/orders/models/entities"}, // Explicitly allow skip-level import
+		},
+		detectUnused: false,
+	}
+
+	v := validator.New(cfg, g)
+	violations := v.Validate()
+
+	// Should NOT have ViolationSkipLevel because it's explicitly allowed
+	for _, viol := range violations {
+		if viol.Type == validator.ViolationSkipLevel {
+			t.Errorf("expected no ViolationSkipLevel (should be overridden by explicit rule), got: %+v", viol)
+		}
+	}
+}

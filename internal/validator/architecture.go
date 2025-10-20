@@ -38,6 +38,11 @@ func (v *Validator) validateFile(node FileNode) []Violation {
 		if fileTopDir == "cmd" && depTopDir == "cmd" {
 			// cmd/X cannot import cmd/Y
 			if !strings.HasPrefix(localPath, fileDir+"/") {
+				// Check if this import is explicitly allowed via directories_import
+				if v.isImportExplicitlyAllowed(fileDir, localPath) {
+					continue
+				}
+
 				violations = append(violations, Violation{
 					Type:  ViolationCrossCmd,
 					File:  node.GetRelPath(),
@@ -52,6 +57,11 @@ func (v *Validator) validateFile(node FileNode) []Violation {
 		if fileTopDir == "pkg" && depTopDir == "pkg" {
 			// pkg/A can only import its direct subpackages pkg/A/*
 			if !v.isDirectSubpackage(fileDir, localPath) {
+				// Check if this import is explicitly allowed via directories_import
+				if v.isImportExplicitlyAllowed(fileDir, localPath) {
+					continue
+				}
+
 				violations = append(violations, Violation{
 					Type:  ViolationPkgToPkg,
 					File:  node.GetRelPath(),
@@ -65,6 +75,11 @@ func (v *Validator) validateFile(node FileNode) []Violation {
 		// Rule 3: Check skip-level imports for pkg
 		if fileTopDir == "pkg" && depTopDir == "pkg" {
 			if v.isSkipLevelImport(fileDir, localPath) {
+				// Check if this import is explicitly allowed via directories_import
+				if v.isImportExplicitlyAllowed(fileDir, localPath) {
+					continue
+				}
+
 				violations = append(violations, Violation{
 					Type:  ViolationSkipLevel,
 					File:  node.GetRelPath(),
@@ -271,4 +286,24 @@ func (v *Validator) isBlackBoxTest(node FileNode) bool {
 func (v *Validator) isParentPackageImport(fileDir string, importPath string) bool {
 	// The import path should match the file's directory
 	return fileDir == importPath
+}
+
+// isImportExplicitlyAllowed checks if an import is explicitly allowed by directories_import rules.
+// This enables explicit rules to override hardcoded checks (pkg-to-pkg, cross-cmd, skip-level).
+// Returns true if there's an explicit rule that permits this import.
+func (v *Validator) isImportExplicitlyAllowed(fileDir string, importPath string) bool {
+	dirImports := v.cfg.GetDirectoriesImport()
+	fileTopDir := getTopLevelDir(fileDir)
+
+	// Try exact directory match first (e.g., "pkg/plugins/claude_code")
+	if allowed, exists := dirImports[fileDir]; exists {
+		return v.isImportAllowed(importPath, allowed)
+	}
+
+	// Fall back to top-level directory (e.g., "pkg")
+	if allowed, exists := dirImports[fileTopDir]; exists {
+		return v.isImportAllowed(importPath, allowed)
+	}
+
+	return false
 }

@@ -299,6 +299,28 @@ Completely isolated packages with single responsibility:
 4. **ViolationForbidden** - Violates `directories_import` rules
 5. **ViolationUnused** - Package in `pkg/` not transitively imported from `cmd/`
 
+### Hardcoded Checks vs. Explicit Rules
+
+The tool provides **opinionated hardcoded checks** (ViolationPkgToPkg, ViolationCrossCmd, ViolationSkipLevel) as sensible defaults that enforce common architectural patterns and help teams avoid pitfalls.
+
+However, **explicit `directories_import` rules act as "escape hatches"** that override these hardcoded checks when you have a legitimate architectural reason:
+
+```yaml
+rules:
+  directories_import:
+    pkg/plugins/claude_code:
+      - pkg/pluginsdk  # Explicitly allows pkg-to-pkg import
+```
+
+**How it works:**
+- If there's an explicit rule for a directory (exact match or top-level), imports matching that rule bypass hardcoded checks
+- This enables patterns like **shared SDK packages** (`pkg/pluginsdk` imported by `pkg/plugins/*`)
+- Without explicit rules, hardcoded checks remain active (preserving strict defaults)
+
+**Example use case:** Plugin architecture where `pkg/pluginsdk` provides a public API that multiple plugin packages (`pkg/plugins/claude_code`, `pkg/plugins/other`) need to import. This is a valid pattern where a shared SDK package serves as a stability boundary.
+
+**Key principle:** Explicit rules represent deliberate architectural decisions. Use them consciously, document why, and verify they serve a legitimate pattern.
+
 ## Key Files
 
 - **pkg/linter/linter.go** - All adapters, heart of dependency inversion
