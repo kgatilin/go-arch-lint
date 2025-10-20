@@ -333,7 +333,7 @@ Completely isolated packages with single responsibility:
 - ❌ Business logic in pkg/linter or cmd/ → Belongs in `internal/`
 - ❌ Committing without tests → Every feature needs tests
 
-## Commit Checklist (MANDATORY)
+## Commit Checklist (MANDATORY) (use TodoWrite tool not to forget)
 
 **Before committing:**
 
@@ -374,8 +374,6 @@ Completely isolated packages with single responsibility:
    - <change 1>
    - <change 2>
 
-   🤖 Generated with [Claude Code](https://claude.com/claude-code)
-   Co-Authored-By: Claude <noreply@anthropic.com>
    EOF
    )"
    git log -1 --stat
