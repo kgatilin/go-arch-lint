@@ -11,7 +11,7 @@ import (
 
 // version is set via -ldflags during build
 // Example: go build -ldflags "-X main.version=v1.0.0" ./cmd/go-arch-lint
-var version = "0.0.7"
+var version = "0.0.8"
 
 func printHelp() {
 	fmt.Println(`go-arch-lint - Go architecture linter that enforces strict dependency rules
