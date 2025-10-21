@@ -131,6 +131,7 @@ type ErrorContext struct {
 	Principles               []string
 	RefactoringGuidance      string
 	CoverageGuidance         string
+	TestNamingGuidance       string
 	BlackboxTestingGuidance  string
 }
 
@@ -194,19 +195,24 @@ func FormatViolationsWithContext(violations []Violation, errorContext *ErrorCont
 	if errorContext != nil && errorContext.Enabled {
 		sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
 
-		// Categorize violations into test-related vs architectural
-		hasTestViolations := false
+		// Categorize violations into different types
+		hasCoverageViolations := false
+		hasTestNamingViolations := false
 		hasArchitecturalViolations := false
 		hasWhiteboxTestViolations := false
 
 		for _, v := range violations {
 			violationType := v.GetType()
 
-			// Test-related violations (coverage, test file issues)
-			if violationType == "Insufficient Test Coverage" ||
-			   violationType == "Test File Wrong Location" ||
-			   violationType == "Test Naming Convention" {
-				hasTestViolations = true
+			// Test coverage violations
+			if violationType == "Insufficient Test Coverage" {
+				hasCoverageViolations = true
+			} else if violationType == "Test Naming Convention" {
+				// Test naming violations (separate from coverage)
+				hasTestNamingViolations = true
+			} else if violationType == "Test File Wrong Location" {
+				// Test file location issues
+				hasCoverageViolations = true // Group with coverage for now
 			} else if violationType == "Whitebox Test" {
 				hasWhiteboxTestViolations = true
 			} else {
@@ -222,10 +228,17 @@ func FormatViolationsWithContext(violations []Violation, errorContext *ErrorCont
 			sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
 		}
 
-		// Show test/coverage guidance ONLY for test-related violations
-		if hasTestViolations && errorContext.CoverageGuidance != "" {
+		// Show test coverage guidance ONLY for coverage violations
+		if hasCoverageViolations && errorContext.CoverageGuidance != "" {
 			sb.WriteString("┌─ TEST COVERAGE GUIDANCE ───────────────────────────────────────────────────────┐\n")
 			sb.WriteString(errorContext.CoverageGuidance)
+			sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
+		}
+
+		// Show test naming guidance ONLY for test naming violations
+		if hasTestNamingViolations && errorContext.TestNamingGuidance != "" {
+			sb.WriteString("┌─ TEST NAMING GUIDANCE ─────────────────────────────────────────────────────────┐\n")
+			sb.WriteString(errorContext.TestNamingGuidance)
 			sb.WriteString("└────────────────────────────────────────────────────────────────────────────────┘\n\n")
 		}
 
@@ -237,7 +250,8 @@ func FormatViolationsWithContext(violations []Violation, errorContext *ErrorCont
 		}
 
 		// Different tips based on violation types
-		if (hasTestViolations || hasWhiteboxTestViolations) && hasArchitecturalViolations {
+		hasAnyTestViolations := hasCoverageViolations || hasTestNamingViolations || hasWhiteboxTestViolations
+		if hasAnyTestViolations && hasArchitecturalViolations {
 			sb.WriteString("💡 TIP: Address architectural violations first, then improve test quality and coverage.\n")
 			sb.WriteString("   Good tests verify correct behavior - make sure the architecture is sound\n")
 			sb.WriteString("   before investing in comprehensive test coverage.\n")
@@ -246,18 +260,22 @@ func FormatViolationsWithContext(violations []Violation, errorContext *ErrorCont
 			sb.WriteString("   Focus on understanding WHY the target architecture matters, then refactor\n")
 			sb.WriteString("   accordingly. Don't just move code to make the linter happy - restructure\n")
 			sb.WriteString("   to achieve the architectural goals described above.\n")
-		} else if hasWhiteboxTestViolations && hasTestViolations {
-			sb.WriteString("💡 TIP: Start with blackbox testing, then improve coverage.\n")
+		} else if hasWhiteboxTestViolations && (hasCoverageViolations || hasTestNamingViolations) {
+			sb.WriteString("💡 TIP: Start with blackbox testing, then improve coverage and naming.\n")
 			sb.WriteString("   Blackbox tests (package foo_test) are more resilient to refactoring and\n")
 			sb.WriteString("   encourage better API design. After converting to blackbox, focus on coverage.\n")
 		} else if hasWhiteboxTestViolations {
 			sb.WriteString("💡 TIP: Blackbox testing improves test resilience and API design.\n")
 			sb.WriteString("   Tests using 'package foo_test' verify behavior through the public interface,\n")
 			sb.WriteString("   making them more maintainable and resilient to internal refactoring.\n")
-		} else if hasTestViolations {
+		} else if hasCoverageViolations {
 			sb.WriteString("💡 TIP: Test coverage ensures your code works correctly and can be refactored safely.\n")
 			sb.WriteString("   Focus on testing critical paths and business logic first. Use coverage\n")
 			sb.WriteString("   reports to identify untested code, then write tests that verify behavior.\n")
+		} else if hasTestNamingViolations {
+			sb.WriteString("💡 TIP: Consistent test naming helps teams navigate and understand test suites.\n")
+			sb.WriteString("   Orphaned test files often indicate outdated tests after refactoring. Clean\n")
+			sb.WriteString("   them up to maintain a clear relationship between code and tests.\n")
 		}
 	}
 

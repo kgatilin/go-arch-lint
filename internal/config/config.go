@@ -56,6 +56,7 @@ type ErrorPrompt struct {
 	Principles               []string `yaml:"principles,omitempty"`
 	RefactoringGuidance      string   `yaml:"refactoring_guidance,omitempty"`
 	CoverageGuidance         string   `yaml:"coverage_guidance,omitempty"`
+	TestNamingGuidance       string   `yaml:"test_naming_guidance,omitempty"`
 	BlackboxTestingGuidance  string   `yaml:"blackbox_testing_guidance,omitempty"`
 }
 
@@ -396,6 +397,9 @@ func mergeErrorPrompt(base ErrorPrompt, override *ErrorPrompt) ErrorPrompt {
 	}
 	if override.CoverageGuidance != "" {
 		result.CoverageGuidance = override.CoverageGuidance
+	}
+	if override.TestNamingGuidance != "" {
+		result.TestNamingGuidance = override.TestNamingGuidance
 	}
 	if override.BlackboxTestingGuidance != "" {
 		result.BlackboxTestingGuidance = override.BlackboxTestingGuidance
