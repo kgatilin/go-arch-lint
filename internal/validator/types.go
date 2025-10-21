@@ -18,6 +18,7 @@ type Config interface {
 	GetCoverageThreshold() float64
 	GetPackageThresholds() map[string]float64
 	GetModule() string
+	ShouldEnforceStrictTestNaming() bool
 }
 
 // PackageCoverage interface for accessing package coverage information
@@ -63,6 +64,7 @@ const (
 	ViolationTestFileLocation     ViolationType = "Test File Wrong Location"
 	ViolationWhiteboxTest         ViolationType = "Whitebox Test"
 	ViolationLowCoverage          ViolationType = "Insufficient Test Coverage"
+	ViolationTestNaming           ViolationType = "Test Naming Convention"
 )
 
 // Violation represents an architectural rule violation

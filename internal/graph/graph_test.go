@@ -8,14 +8,18 @@ import (
 
 // testFileInfo implements graph.FileInfo interface for testing
 type testFileInfo struct {
-	relPath string
-	pkg     string
-	imports []string
+	relPath  string
+	pkg      string
+	imports  []string
+	baseName string
+	isTest   bool
 }
 
-func (t testFileInfo) GetRelPath() string  { return t.relPath }
-func (t testFileInfo) GetPackage() string  { return t.pkg }
+func (t testFileInfo) GetRelPath() string   { return t.relPath }
+func (t testFileInfo) GetPackage() string   { return t.pkg }
 func (t testFileInfo) GetImports() []string { return t.imports }
+func (t testFileInfo) GetBaseName() string  { return t.baseName }
+func (t testFileInfo) GetIsTest() bool      { return t.isTest }
 
 func TestBuild_LocalAndExternalImports(t *testing.T) {
 	files := []graph.FileInfo{

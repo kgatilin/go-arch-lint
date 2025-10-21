@@ -511,6 +511,82 @@ rules:
 - **Matches Go conventions**: The `colocated` policy follows standard Go project layout
 - **Supports preferences**: Teams can choose their preferred test organization style
 
+#### Strict Test Naming Convention
+
+**Purpose:** Enforce a strict 1:1 mapping between implementation files and test files to maintain clarity and organization.
+
+**Configuration:**
+```yaml
+rules:
+  strict_test_naming: true  # Opt-in (default: false)
+  test_files:
+    lint: true  # Must be enabled for strict_test_naming to work
+```
+
+**When Enabled:**
+- Every `foo.go` file must have exactly one corresponding `foo_test.go` file in the same directory
+- Every `foo_test.go` file must have a corresponding `foo.go` file (no orphaned tests)
+- Prevents confusion from multiple test files testing the same functionality
+- Excludes special files: `doc.go`, generated files (`*_gen.go`, `*.pb.go`), test helpers (`*_helper_test.go`)
+
+**Example - Valid Structure:**
+```
+pkg/
+  service.go       # Implementation
+  service_test.go  # Corresponding test file ✅
+```
+
+**Example - Violations:**
+```
+pkg/
+  service.go            # Implementation
+  service_test.go       # Main test file ✅
+  service_integration_test.go  # ❌ Multiple test files for same base name
+```
+
+**Violation Messages:**
+
+**Missing test file:**
+```
+[ERROR] Test Naming Convention
+  File: pkg/service.go
+  Issue: Implementation file 'service.go' has no corresponding test file
+  Rule: strict_test_naming: Each implementation file must have a corresponding test file (foo.go -> foo_test.go)
+  Fix: Create test file 'service_test.go' in the same directory
+```
+
+**Orphaned test file:**
+```
+[ERROR] Test Naming Convention
+  File: pkg/utils_test.go
+  Issue: Test file 'utils_test.go' has no corresponding implementation file
+  Rule: strict_test_naming: Each test file must have a corresponding implementation file (foo_test.go -> foo.go)
+  Fix: Create implementation file 'utils.go' in the same directory, or remove/rename the orphaned test file
+```
+
+**Multiple test files:**
+```
+[ERROR] Test Naming Convention
+  File: pkg/service_integration_test.go
+  Issue: Multiple test files found with base name 'service' in directory 'pkg'
+  Rule: strict_test_naming: Each implementation file should have exactly one corresponding test file (foo.go -> foo_test.go)
+  Fix: Consolidate test files into single 'service_test.go' file, or rename to use different base names
+```
+
+**Why This Matters:**
+- **Clarity**: Know exactly where to find tests for any given file
+- **Organization**: Prevents test file proliferation and confusion
+- **Maintainability**: Clear 1:1 mapping makes codebase easier to navigate
+- **Discipline**: Encourages focused, well-organized test files
+
+**Excluded Files (automatic):**
+- Documentation files: `doc.go`
+- Generated files: `*_gen.go`, `*_generated.go`, `*.pb.go`
+- Mock files: `*_mock.go`, `*_mocks.go`
+- Test helpers: Files containing `_helper` or `testutil` in the base name
+
+**Note:** This is an **opt-in** feature designed for teams that value strict test organization. It's not required by default and may not suit all projects, especially those with complex testing patterns (integration tests, benchmark files, etc.).
+
 **Gradual Adoption:**
 1. Start with `lint: false` (default) - test files are ignored
 2. Enable `lint: true` to discover violations

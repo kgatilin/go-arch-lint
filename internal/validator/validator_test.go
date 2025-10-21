@@ -48,7 +48,8 @@ func (tc *testConfig) GetPackageThresholds() map[string]float64 {
 	}
 	return tc.packageThresholds
 }
-func (tc *testConfig) GetModule() string { return tc.module }
+func (tc *testConfig) GetModule() string                 { return tc.module }
+func (tc *testConfig) ShouldEnforceStrictTestNaming() bool { return false }
 
 type testDependency struct {
 	importPath string
