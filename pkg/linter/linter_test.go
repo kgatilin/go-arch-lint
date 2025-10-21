@@ -1647,3 +1647,260 @@ func TestPresets_RequireBlackboxDefault(t *testing.T) {
 		}
 	}
 }
+
+func TestRun_StrictTestNaming_MissingTestFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .goarchlint config with strict_test_naming enabled
+	configYAML := `rules:
+  directories_import:
+    pkg: []
+  strict_test_naming: true
+  test_files:
+    lint: true
+scan_paths:
+  - pkg
+ignore_paths: []
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create pkg file WITHOUT test file
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	fooGo := `package pkg
+
+func Foo() string {
+	return "foo"
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "foo.go"), []byte(fooGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run linter
+	_, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false, "")
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	// Should have violation for missing test file
+	if violationsOutput == "" {
+		t.Fatal("expected violations for missing test file, got none")
+	}
+
+	if !strings.Contains(violationsOutput, "Test Naming Convention") {
+		t.Errorf("expected 'Test Naming Convention' violation, got: %s", violationsOutput)
+	}
+
+	if !strings.Contains(violationsOutput, "no corresponding test file") {
+		t.Errorf("expected error about missing test file, got: %s", violationsOutput)
+	}
+
+	if !strings.Contains(violationsOutput, "foo.go") {
+		t.Errorf("expected violation to reference foo.go, got: %s", violationsOutput)
+	}
+}
+
+func TestRun_StrictTestNaming_OrphanedTestFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .goarchlint config with strict_test_naming enabled
+	configYAML := `rules:
+  directories_import:
+    pkg: []
+  strict_test_naming: true
+  test_files:
+    lint: true
+scan_paths:
+  - pkg
+ignore_paths: []
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create test file WITHOUT implementation file
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	fooTestGo := `package pkg_test
+
+import "testing"
+
+func TestFoo(t *testing.T) {
+	// Test without implementation
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "foo_test.go"), []byte(fooTestGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run linter
+	_, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false, "")
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	// Should have violation for orphaned test file
+	if violationsOutput == "" {
+		t.Fatal("expected violations for orphaned test file, got none")
+	}
+
+	if !strings.Contains(violationsOutput, "Test Naming Convention") {
+		t.Errorf("expected 'Test Naming Convention' violation, got: %s", violationsOutput)
+	}
+
+	if !strings.Contains(violationsOutput, "no corresponding implementation file") {
+		t.Errorf("expected error about orphaned test file, got: %s", violationsOutput)
+	}
+
+	if !strings.Contains(violationsOutput, "foo_test.go") {
+		t.Errorf("expected violation to reference foo_test.go, got: %s", violationsOutput)
+	}
+}
+
+func TestRun_StrictTestNaming_Valid(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .goarchlint config with strict_test_naming enabled
+	configYAML := `rules:
+  directories_import:
+    pkg: []
+  strict_test_naming: true
+  test_files:
+    lint: true
+scan_paths:
+  - pkg
+ignore_paths: []
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create implementation and test file (valid 1:1)
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	fooGo := `package pkg
+
+func Foo() string {
+	return "foo"
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "foo.go"), []byte(fooGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fooTestGo := `package pkg_test
+
+import "testing"
+
+func TestFoo(t *testing.T) {
+	// Valid test
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "foo_test.go"), []byte(fooTestGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run linter
+	_, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false, "")
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	// Should have no violations
+	if violationsOutput != "" {
+		t.Errorf("expected no violations for valid 1:1 mapping, got: %s", violationsOutput)
+	}
+}
+
+func TestRun_StrictTestNaming_Disabled(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .goarchlint config WITHOUT strict_test_naming
+	configYAML := `rules:
+  directories_import:
+    pkg: []
+  test_files:
+    lint: true
+scan_paths:
+  - pkg
+ignore_paths: []
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".goarchlint"), []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create go.mod
+	goMod := `module github.com/test/project
+
+go 1.21
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create implementation WITHOUT test file
+	pkgDir := filepath.Join(tmpDir, "pkg")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	fooGo := `package pkg
+
+func Foo() string {
+	return "foo"
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "foo.go"), []byte(fooGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run linter
+	_, violationsOutput, _, err := linter.Run(tmpDir, "markdown", false, false, "")
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	// Should have no violations when feature is disabled
+	if violationsOutput != "" {
+		t.Errorf("expected no violations when strict_test_naming is disabled, got: %s", violationsOutput)
+	}
+}

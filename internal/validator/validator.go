@@ -69,5 +69,10 @@ func (v *Validator) Validate() []Violation {
 		violations = append(violations, v.validateCoverage()...)
 	}
 
+	// Check strict test naming convention
+	if v.cfg.ShouldEnforceStrictTestNaming() {
+		violations = append(violations, v.validateTestNaming()...)
+	}
+
 	return violations
 }

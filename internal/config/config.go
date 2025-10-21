@@ -84,6 +84,7 @@ type Rules struct {
 	TestFiles             TestFiles             `yaml:"test_files,omitempty"`
 	TestCoverage          TestCoverage          `yaml:"test_coverage,omitempty"`
 	Staticcheck           bool                  `yaml:"staticcheck,omitempty"`
+	StrictTestNaming      bool                  `yaml:"strict_test_naming,omitempty"`
 }
 
 type TestFiles struct {
@@ -233,6 +234,11 @@ func (c *Config) ShouldRunStaticcheck() bool {
 	return c.getMerged().Rules.Staticcheck
 }
 
+// ShouldEnforceStrictTestNaming implements validator.Config interface
+func (c *Config) ShouldEnforceStrictTestNaming() bool {
+	return c.getMerged().Rules.StrictTestNaming
+}
+
 // mergeStringSlices merges two string slices, avoiding duplicates
 func mergeStringSlices(base, override []string) []string {
 	// Create a set of existing items
@@ -361,6 +367,9 @@ func mergeRules(base Rules, override *Rules) Rules {
 	}
 	if override.TestCoverage.Enabled {
 		result.TestCoverage.Enabled = true
+	}
+	if override.StrictTestNaming {
+		result.StrictTestNaming = true
 	}
 
 	return result

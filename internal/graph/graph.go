@@ -10,6 +10,8 @@ type FileInfo interface {
 	GetRelPath() string
 	GetPackage() string
 	GetImports() []string
+	GetBaseName() string
+	GetIsTest() bool
 }
 
 type Dependency struct {
@@ -40,6 +42,8 @@ type FileNode struct {
 	RelPath      string
 	Package      string
 	Dependencies []Dependency
+	BaseName     string // Base name without extension and _test suffix
+	IsTest       bool   // Whether this is a test file
 }
 
 // Methods for adapter pattern (structural typing - no imports needed)
@@ -49,6 +53,14 @@ func (fn FileNode) GetRelPath() string {
 
 func (fn FileNode) GetPackage() string {
 	return fn.Package
+}
+
+func (fn FileNode) GetBaseName() string {
+	return fn.BaseName
+}
+
+func (fn FileNode) GetIsTest() bool {
+	return fn.IsTest
 }
 
 type Graph struct {
@@ -80,6 +92,8 @@ func Build(files []FileInfo, module string) *Graph {
 			RelPath:      file.GetRelPath(),
 			Package:      file.GetPackage(),
 			Dependencies: make([]Dependency, 0, len(imports)),
+			BaseName:     file.GetBaseName(),
+			IsTest:       file.GetIsTest(),
 		}
 
 		for _, imp := range imports {
@@ -116,6 +130,8 @@ func BuildDetailed(files []FileInfo, module string, usageMap map[string]map[stri
 			RelPath:      file.GetRelPath(),
 			Package:      file.GetPackage(),
 			Dependencies: make([]Dependency, 0),
+			BaseName:     file.GetBaseName(),
+			IsTest:       file.GetIsTest(),
 		}
 
 		// Get usage information for this file

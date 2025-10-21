@@ -204,7 +204,8 @@ func FormatViolationsWithContext(violations []Violation, errorContext *ErrorCont
 
 			// Test-related violations (coverage, test file issues)
 			if violationType == "Insufficient Test Coverage" ||
-			   violationType == "Test File Wrong Location" {
+			   violationType == "Test File Wrong Location" ||
+			   violationType == "Test Naming Convention" {
 				hasTestViolations = true
 			} else if violationType == "Whitebox Test" {
 				hasWhiteboxTestViolations = true

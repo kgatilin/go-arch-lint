@@ -98,6 +98,14 @@ func (fna *fileNodeAdapter) GetDependencies() []validator.Dependency {
 	return deps
 }
 
+func (fna *fileNodeAdapter) GetBaseName() string {
+	return fna.node.BaseName
+}
+
+func (fna *fileNodeAdapter) GetIsTest() bool {
+	return fna.node.IsTest
+}
+
 // outputGraphAdapter adapts graph.Graph to output.Graph interface
 type outputGraphAdapter struct {
 	g *graph.Graph

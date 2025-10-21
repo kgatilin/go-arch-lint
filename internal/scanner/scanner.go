@@ -26,6 +26,8 @@ type FileInfo struct {
 	Imports       []string       // Import paths
 	ImportUsages  []ImportUsage  // Detailed import usage (nil if not requested)
 	ExportedDecls []ExportedDecl // Exported API declarations (nil if not requested)
+	IsTest        bool           // Whether this is a test file (*_test.go)
+	BaseName      string         // Base name without extension and _test suffix (e.g., "foo" from "foo.go" or "foo_test.go")
 }
 
 // ImportUsage tracks which symbols are used from an import
@@ -91,6 +93,16 @@ func (f FileInfo) GetPackage() string {
 // GetImports implements graph.FileInfo interface
 func (f FileInfo) GetImports() []string {
 	return f.Imports
+}
+
+// GetBaseName implements graph.FileInfo interface
+func (f FileInfo) GetBaseName() string {
+	return f.BaseName
+}
+
+// GetIsTest implements graph.FileInfo interface
+func (f FileInfo) GetIsTest() bool {
+	return f.IsTest
 }
 
 type Scanner struct {
@@ -189,11 +201,18 @@ func (s *Scanner) parseFileWithOptions(path string, opts ScanOptions) (FileInfo,
 		imports = append(imports, importPath)
 	}
 
+	// Determine if this is a test file and extract base name
+	fileName := filepath.Base(path)
+	isTest := strings.HasSuffix(fileName, "_test.go")
+	baseName := extractBaseName(fileName)
+
 	fileInfo := FileInfo{
-		Path:    path,
-		RelPath: relPath,
-		Package: node.Name.Name,
-		Imports: imports,
+		Path:     path,
+		RelPath:  relPath,
+		Package:  node.Name.Name,
+		Imports:  imports,
+		IsTest:   isTest,
+		BaseName: baseName,
 	}
 
 	// Optionally extract import usages
@@ -287,6 +306,25 @@ func (s *Scanner) shouldIgnore(path string) bool {
 	}
 
 	return false
+}
+
+// extractBaseName extracts the base name from a filename, removing .go extension and _test suffix
+// Examples:
+//   - "foo.go" -> "foo"
+//   - "foo_test.go" -> "foo"
+//   - "foo_bar.go" -> "foo_bar"
+//   - "foo_bar_test.go" -> "foo_bar"
+func extractBaseName(fileName string) string {
+	// Remove .go extension
+	if !strings.HasSuffix(fileName, ".go") {
+		return fileName
+	}
+	baseName := fileName[:len(fileName)-3] // Remove ".go"
+
+	// Remove _test suffix if present
+	baseName = strings.TrimSuffix(baseName, "_test")
+
+	return baseName
 }
 
 
