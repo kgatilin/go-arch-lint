@@ -161,6 +161,10 @@ func (fwa *fileWithAPIAdapter) GetExportedDecls() []output.ExportedDecl {
 	return decls
 }
 
+func (fwa *fileWithAPIAdapter) GetLineCount() int {
+	return fwa.file.LineCount
+}
+
 // Run executes the linter on the specified project path
 // packagePath is only used when format is "package" to specify which package to document
 func Run(projectPath string, format string, detailed bool, runStaticcheck bool, packagePath string) (string, string, bool, error) {

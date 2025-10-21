@@ -217,9 +217,10 @@ func TestFormatViolations_UnusedPackage(t *testing.T) {
 
 // Test adapter for FileWithAPI
 type testFileWithAPI struct {
-	relPath string
-	pkg     string
-	decls   []output.ExportedDecl
+	relPath   string
+	pkg       string
+	decls     []output.ExportedDecl
+	lineCount int
 }
 
 func (tf *testFileWithAPI) GetRelPath() string {
@@ -232,6 +233,10 @@ func (tf *testFileWithAPI) GetPackage() string {
 
 func (tf *testFileWithAPI) GetExportedDecls() []output.ExportedDecl {
 	return tf.decls
+}
+
+func (tf *testFileWithAPI) GetLineCount() int {
+	return tf.lineCount
 }
 
 // Test adapter for ExportedDecl

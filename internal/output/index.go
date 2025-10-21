@@ -7,11 +7,18 @@ import (
 	"time"
 )
 
+// FileDetail contains information about a single file
+type FileDetail struct {
+	Name      string // File name (e.g., "linter.go")
+	LineCount int    // Number of lines in the file
+}
+
 // PackageIndexInfo contains summary information about a package
 type PackageIndexInfo struct {
 	Name         string
-	Path         string   // Directory path for the package (e.g., "pkg/linter")
+	Path         string       // Directory path for the package (e.g., "pkg/linter")
 	FileCount    int
+	Files        []FileDetail // List of files with line counts
 	ExportCount  int
 	KeyExports   []string // Top 3-4 important types/functions
 	Dependencies []string // Just package names
@@ -204,6 +211,7 @@ func buildPackagesByLayer(files []FileWithAPI) LayerPackages {
 			packageMap[pkgPath] = &PackageIndexInfo{
 				Name:         pkgName,
 				Path:         pkgPath,
+				Files:        []FileDetail{},
 				KeyExports:   []string{},
 				Dependencies: []string{},
 			}
@@ -214,9 +222,18 @@ func buildPackagesByLayer(files []FileWithAPI) LayerPackages {
 		// Skip test files when counting files and collecting exports
 		isTestFile := strings.HasSuffix(relPath, "_test.go")
 
-		// Only count non-test files
+		// Only count and track non-test files
 		if !isTestFile {
 			pkg.FileCount++
+			// Extract file name from path
+			fileName := relPath
+			if idx := strings.LastIndex(relPath, "/"); idx >= 0 {
+				fileName = relPath[idx+1:]
+			}
+			pkg.Files = append(pkg.Files, FileDetail{
+				Name:      fileName,
+				LineCount: file.GetLineCount(),
+			})
 		}
 
 		// Collect unique key exports (types and important functions)
@@ -277,7 +294,22 @@ func buildPackagesByLayer(files []FileWithAPI) LayerPackages {
 func formatPackageEntry(sb *strings.Builder, pkg PackageIndexInfo) {
 	// Package name and path
 	sb.WriteString(fmt.Sprintf("- **%s** (`%s`)\n", pkg.Name, pkg.Path))
-	sb.WriteString(fmt.Sprintf("  - Files: %d | Exports: %d\n", pkg.FileCount, pkg.ExportCount))
+
+	// Format files with line counts
+	if len(pkg.Files) > 0 {
+		// Sort files by name for consistent output
+		sort.Slice(pkg.Files, func(i, j int) bool {
+			return pkg.Files[i].Name < pkg.Files[j].Name
+		})
+
+		fileDetails := make([]string, len(pkg.Files))
+		for i, file := range pkg.Files {
+			fileDetails[i] = fmt.Sprintf("%s: %d", file.Name, file.LineCount)
+		}
+		sb.WriteString(fmt.Sprintf("  - Files: %d (%s) | Exports: %d\n", pkg.FileCount, strings.Join(fileDetails, ", "), pkg.ExportCount))
+	} else {
+		sb.WriteString(fmt.Sprintf("  - Files: %d | Exports: %d\n", pkg.FileCount, pkg.ExportCount))
+	}
 
 	// Key exports
 	if len(pkg.KeyExports) > 0 {
