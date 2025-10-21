@@ -39,6 +39,7 @@ type FileWithAPI interface {
 	GetRelPath() string
 	GetPackage() string
 	GetExportedDecls() []ExportedDecl
+	GetLineCount() int
 }
 
 // Violation represents a validation violation

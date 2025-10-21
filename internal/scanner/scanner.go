@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"bufio"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -28,6 +29,7 @@ type FileInfo struct {
 	ExportedDecls []ExportedDecl // Exported API declarations (nil if not requested)
 	IsTest        bool           // Whether this is a test file (*_test.go)
 	BaseName      string         // Base name without extension and _test suffix (e.g., "foo" from "foo.go" or "foo_test.go")
+	LineCount     int            // Number of lines in the file
 }
 
 // ImportUsage tracks which symbols are used from an import
@@ -103,6 +105,11 @@ func (f FileInfo) GetBaseName() string {
 // GetIsTest implements graph.FileInfo interface
 func (f FileInfo) GetIsTest() bool {
 	return f.IsTest
+}
+
+// GetLineCount returns the number of lines in the file
+func (f FileInfo) GetLineCount() int {
+	return f.LineCount
 }
 
 type Scanner struct {
@@ -193,6 +200,13 @@ func (s *Scanner) parseFileWithOptions(path string, opts ScanOptions) (FileInfo,
 		return FileInfo{}, err
 	}
 
+	// Count lines in the file
+	lineCount, err := countLines(path)
+	if err != nil {
+		// If counting lines fails, don't fail the whole parse - just set to 0
+		lineCount = 0
+	}
+
 	// Build import list
 	var imports []string
 	for _, imp := range node.Imports {
@@ -207,12 +221,13 @@ func (s *Scanner) parseFileWithOptions(path string, opts ScanOptions) (FileInfo,
 	baseName := extractBaseName(fileName)
 
 	fileInfo := FileInfo{
-		Path:     path,
-		RelPath:  relPath,
-		Package:  node.Name.Name,
-		Imports:  imports,
-		IsTest:   isTest,
-		BaseName: baseName,
+		Path:      path,
+		RelPath:   relPath,
+		Package:   node.Name.Name,
+		Imports:   imports,
+		IsTest:    isTest,
+		BaseName:  baseName,
+		LineCount: lineCount,
 	}
 
 	// Optionally extract import usages
@@ -525,4 +540,25 @@ func extractStructFields(typeExpr ast.Expr) []string {
 	}
 
 	return fields
+}
+
+// countLines counts the number of lines in a file
+func countLines(path string) (int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	lineCount := 0
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lineCount++
+	}
+
+	if err := scanner.Err(); err != nil {
+		return 0, err
+	}
+
+	return lineCount, nil
 }

@@ -53,11 +53,13 @@ type testFileWithAPIForIndex struct {
 	relPath      string
 	pkgName      string
 	exportedDecls []output.ExportedDecl
+	lineCount    int
 }
 
 func (twa *testFileWithAPIForIndex) GetRelPath() string                    { return twa.relPath }
 func (twa *testFileWithAPIForIndex) GetPackage() string                    { return twa.pkgName }
 func (twa *testFileWithAPIForIndex) GetExportedDecls() []output.ExportedDecl { return twa.exportedDecls }
+func (twa *testFileWithAPIForIndex) GetLineCount() int                     { return twa.lineCount }
 
 // Tests
 
@@ -170,8 +172,9 @@ func TestGenerateIndexDocumentation_ContainsPackageInfo(t *testing.T) {
 
 	files := []output.FileWithAPI{
 		&testFileWithAPIForIndex{
-			relPath: "pkg/linter/linter.go",
-			pkgName: "pkg/linter",
+			relPath:   "pkg/linter/linter.go",
+			pkgName:   "pkg/linter",
+			lineCount: 234,
 			exportedDecls: []output.ExportedDecl{
 				&testExportedDeclForIndex{name: "Run", kind: "func"},
 				&testExportedDeclForIndex{name: "Init", kind: "func"},
@@ -179,8 +182,9 @@ func TestGenerateIndexDocumentation_ContainsPackageInfo(t *testing.T) {
 			},
 		},
 		&testFileWithAPIForIndex{
-			relPath: "internal/config/config.go",
-			pkgName: "internal/config",
+			relPath:   "internal/config/config.go",
+			pkgName:   "internal/config",
+			lineCount: 156,
 			exportedDecls: []output.ExportedDecl{
 				&testExportedDeclForIndex{name: "Config", kind: "type"},
 				&testExportedDeclForIndex{name: "Load", kind: "func"},
@@ -230,6 +234,14 @@ func TestGenerateIndexDocumentation_ContainsPackageInfo(t *testing.T) {
 	}
 	if !strings.Contains(result, "| Exports: 2") {
 		t.Error("Expected '| Exports: 2' for config package")
+	}
+
+	// Verify file line counts appear
+	if !strings.Contains(result, "linter.go: 234") {
+		t.Error("Expected line count for linter.go file")
+	}
+	if !strings.Contains(result, "config.go: 156") {
+		t.Error("Expected line count for config.go file")
 	}
 }
 
