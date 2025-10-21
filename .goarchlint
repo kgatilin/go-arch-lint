@@ -99,6 +99,31 @@ preset:
       - internal/: All core business logic, data structures, algorithms, validation
       - pkg/: Public API functions, error handling, interface contracts
       - cmd/: CLI flag parsing, command execution, basic end-to-end workflows
+    test_naming_guidance: |
+      **Why Test Naming Conventions Matter:**
+
+      Consistent test file naming helps teams navigate and maintain test suites effectively:
+
+      - **Orphaned test files** (foo_test.go without foo.go) often indicate outdated tests that weren't cleaned up during refactoring
+      - **Multiple test files** with the same base name (foo_test.go, foo_integration_test.go, foo_bench_test.go) can cause confusion about which tests cover which functionality
+      - **Clear 1:1 correspondence** between implementation and test files makes it easy to find and update tests when code changes
+
+      **What this rule catches:**
+      - Test files without corresponding implementation files (likely orphaned after refactoring)
+      - Multiple test files competing for the same base name (suggests poor organization)
+
+      **What this rule does NOT check:**
+      - Missing test files (use test_coverage thresholds for that)
+      - This is intentional - coverage metrics are better suited for enforcing test completeness
+
+      **How to fix violations:**
+      1. **Orphaned tests:** Either create the missing implementation file or remove/rename the test file if it's outdated
+      2. **Multiple test files:** Consolidate tests into a single file, or use more specific base names (e.g., service_integration_test.go → integration_test.go)
+
+      **When to use this rule:**
+      - Projects with strict naming conventions
+      - Teams that want to catch orphaned test files during refactoring
+      - Codebases where clear test organization is important
     blackbox_testing_guidance: |
       **Why Blackbox Testing Matters:**
 

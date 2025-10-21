@@ -461,6 +461,7 @@ func Run(projectPath string, format string, detailed bool, runStaticcheck bool, 
 			Principles:               errorPrompt.Principles,
 			RefactoringGuidance:      errorPrompt.RefactoringGuidance,
 			CoverageGuidance:         errorPrompt.CoverageGuidance,
+			TestNamingGuidance:       errorPrompt.TestNamingGuidance,
 			BlackboxTestingGuidance:  errorPrompt.BlackboxTestingGuidance,
 		}
 		violationsOutput = output.FormatViolationsWithContext(outViolations, errorContext)
