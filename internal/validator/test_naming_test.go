@@ -164,7 +164,7 @@ func TestValidateTestNaming_Valid_OneToOne(t *testing.T) {
 	}
 }
 
-func TestValidateTestNaming_MissingTestFile(t *testing.T) {
+func TestValidateTestNaming_MissingTestFile_NoViolation(t *testing.T) {
 	cfg := &testNamingConfig{strictTestNaming: true}
 	graph := &mockGraphWithTestInfo{
 		nodes: []validator.FileNode{
@@ -173,27 +173,16 @@ func TestValidateTestNaming_MissingTestFile(t *testing.T) {
 				baseName: "foo",
 				isTest:   false,
 			},
-			// No test file
+			// No test file - this is OK! Coverage handles this
 		},
 	}
 
 	v := validator.New(cfg, graph)
 	violations := v.Validate()
 
-	// Should have 1 violation for missing test file
-	if len(violations) != 1 {
-		t.Fatalf("Expected 1 violation for missing test file, got %d", len(violations))
-	}
-
-	violation := violations[0]
-	if violation.GetType() != "Test Naming Convention" {
-		t.Errorf("Expected violation type 'Test Naming Convention', got '%s'", violation.GetType())
-	}
-	if violation.GetFile() != "pkg/foo.go" {
-		t.Errorf("Expected violation file 'pkg/foo.go', got '%s'", violation.GetFile())
-	}
-	if !strings.Contains(violation.GetIssue(), "no corresponding test file") {
-		t.Errorf("Expected issue to mention missing test file, got: %s", violation.GetIssue())
+	// Should have NO violations - missing test files are handled by coverage metrics
+	if len(violations) != 0 {
+		t.Errorf("Expected 0 violations for missing test file (coverage handles this), got %d: %v", len(violations), violations)
 	}
 }
 
@@ -285,11 +274,11 @@ func TestValidateTestNaming_DifferentDirectories(t *testing.T) {
 				baseName: "foo",
 				isTest:   true,
 			},
-			// Directory 2: missing test
+			// Directory 2: orphaned test file
 			&mockFileNodeWithTestInfo{
-				relPath:  "internal/bar.go",
+				relPath:  "internal/bar_test.go",
 				baseName: "bar",
-				isTest:   false,
+				isTest:   true,
 			},
 		},
 	}
@@ -297,14 +286,14 @@ func TestValidateTestNaming_DifferentDirectories(t *testing.T) {
 	v := validator.New(cfg, graph)
 	violations := v.Validate()
 
-	// Should have 1 violation only for internal/bar.go (missing test)
+	// Should have 1 violation only for internal/bar_test.go (orphaned)
 	if len(violations) != 1 {
 		t.Fatalf("Expected 1 violation, got %d", len(violations))
 	}
 
 	violation := violations[0]
-	if violation.GetFile() != "internal/bar.go" {
-		t.Errorf("Expected violation file 'internal/bar.go', got '%s'", violation.GetFile())
+	if violation.GetFile() != "internal/bar_test.go" {
+		t.Errorf("Expected violation file 'internal/bar_test.go', got '%s'", violation.GetFile())
 	}
 }
 

@@ -513,7 +513,7 @@ rules:
 
 #### Strict Test Naming Convention
 
-**Purpose:** Enforce a strict 1:1 mapping between implementation files and test files to maintain clarity and organization.
+**Purpose:** Prevent orphaned test files and multiple test files for the same base name to maintain clarity and organization.
 
 **Configuration:**
 ```yaml
@@ -524,9 +524,10 @@ rules:
 ```
 
 **When Enabled:**
-- Every `foo.go` file must have exactly one corresponding `foo_test.go` file in the same directory
-- Every `foo_test.go` file must have a corresponding `foo.go` file (no orphaned tests)
-- Prevents confusion from multiple test files testing the same functionality
+- Detects **orphaned test files**: `foo_test.go` without corresponding `foo.go`
+- Detects **multiple test files** with same base name (e.g., `foo_test.go` + `foo_integration_test.go`)
+- Does NOT require every `foo.go` to have `foo_test.go` (use test coverage metrics for that)
+- Prevents confusion from test files without clear purpose
 - Excludes special files: `doc.go`, generated files (`*_gen.go`, `*.pb.go`), test helpers (`*_helper_test.go`)
 
 **Example - Valid Structure:**
@@ -545,15 +546,6 @@ pkg/
 ```
 
 **Violation Messages:**
-
-**Missing test file:**
-```
-[ERROR] Test Naming Convention
-  File: pkg/service.go
-  Issue: Implementation file 'service.go' has no corresponding test file
-  Rule: strict_test_naming: Each implementation file must have a corresponding test file (foo.go -> foo_test.go)
-  Fix: Create test file 'service_test.go' in the same directory
-```
 
 **Orphaned test file:**
 ```
@@ -574,10 +566,12 @@ pkg/
 ```
 
 **Why This Matters:**
-- **Clarity**: Know exactly where to find tests for any given file
-- **Organization**: Prevents test file proliferation and confusion
-- **Maintainability**: Clear 1:1 mapping makes codebase easier to navigate
+- **Prevent orphans**: Test files without implementation are confusing and likely outdated
+- **Organization**: Prevents test file proliferation with multiple files per base name
+- **Maintainability**: Clear naming makes codebase easier to navigate
 - **Discipline**: Encourages focused, well-organized test files
+
+**Note:** This rule does NOT require every implementation file to have a test file - that's what test coverage thresholds are for. It only catches test files that don't have corresponding implementation.
 
 **Excluded Files (automatic):**
 - Documentation files: `doc.go`
@@ -585,7 +579,14 @@ pkg/
 - Mock files: `*_mock.go`, `*_mocks.go`
 - Test helpers: Files containing `_helper` or `testutil` in the base name
 
-**Note:** This is an **opt-in** feature designed for teams that value strict test organization. It's not required by default and may not suit all projects, especially those with complex testing patterns (integration tests, benchmark files, etc.).
+**When to use:**
+- Projects with strict naming conventions
+- Teams that want to catch orphaned test files during refactoring
+- Codebases where multiple test files per module cause confusion
+
+**When NOT to use:**
+- Projects with integration/benchmark tests in separate files (e.g., `service_integration_test.go`)
+- Codebases with flexible test organization patterns
 
 **Gradual Adoption:**
 1. Start with `lint: false` (default) - test files are ignored

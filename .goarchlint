@@ -65,7 +65,7 @@ preset:
       - cmd contains only application entry points and CLI logic
       - pkg contains public libraries that could be imported by other projects
       - internal contains private code that cannot be imported externally (Go compiler enforces this)
-      - 'Dependencies flow: cmd → pkg → internal'
+      - "Dependencies flow: cmd → pkg → internal"
       - internal packages should have zero dependencies on each other for maximum isolation
     refactoring_guidance: |
       To refactor toward simple architecture compliance:
@@ -121,10 +121,13 @@ preset:
 # Note: Exclusion lists are additive (merged with preset defaults)
 overrides:
   rules:
-    staticcheck: true  # Enable staticcheck integration
+    strict_test_naming: true # Opt-in (default: false)
+    test_files:
+      lint: true # Must be enabled
+    staticcheck: true # Enable staticcheck integration
     shared_external_imports:
       exclusions:
-        - gopkg.in/yaml.v3  # Additional: allow yaml library across layers
+        - gopkg.in/yaml.v3 # Additional: allow yaml library across layers
     test_coverage:
       package_thresholds:
-        cmd: 0  # Custom: cmd is just a thin wrapper, no coverage required
+        cmd: 0 # Custom: cmd is just a thin wrapper, no coverage required

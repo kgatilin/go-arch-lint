@@ -109,46 +109,28 @@ func validateFileGroup(dir, baseName string, group *fileGroup) []Violation {
 				Type:  ViolationTestNaming,
 				File:  testFile,
 				Issue: fmt.Sprintf("Multiple test files found with base name '%s' in directory '%s'", baseName, dir),
-				Rule:  "strict_test_naming: Each implementation file should have exactly one corresponding test file (foo.go -> foo_test.go)",
+				Rule:  "strict_test_naming: Each base name should have at most one test file (foo_test.go)",
 				Fix:   fmt.Sprintf("Consolidate test files into single '%s_test.go' file, or rename to use different base names", baseName),
 			})
 		}
 	}
 
-	// Case 3: Implementation file exists but no test file
-	if implCount == 1 && testCount == 0 {
-		violations = append(violations, Violation{
-			Type:  ViolationTestNaming,
-			File:  group.implFiles[0],
-			Issue: fmt.Sprintf("Implementation file '%s' has no corresponding test file", filepath.Base(group.implFiles[0])),
-			Rule:  "strict_test_naming: Each implementation file must have a corresponding test file (foo.go -> foo_test.go)",
-			Fix:   fmt.Sprintf("Create test file '%s_test.go' in the same directory", baseName),
-		})
-	}
-
-	// Case 4: Test file exists but no implementation file (orphaned test)
-	if implCount == 0 && testCount == 1 {
-		violations = append(violations, Violation{
-			Type:  ViolationTestNaming,
-			File:  group.testFiles[0],
-			Issue: fmt.Sprintf("Test file '%s' has no corresponding implementation file", filepath.Base(group.testFiles[0])),
-			Rule:  "strict_test_naming: Each test file must have a corresponding implementation file (foo_test.go -> foo.go)",
-			Fix:   fmt.Sprintf("Create implementation file '%s.go' in the same directory, or remove/rename the orphaned test file", baseName),
-		})
-	}
-
-	// Case 5: No implementation but multiple test files (compound violation)
-	if implCount == 0 && testCount > 1 {
+	// Case 3: Test file exists but no implementation file (orphaned test)
+	// This is the main case we want to catch - test files without corresponding implementation
+	if implCount == 0 && testCount >= 1 {
 		for _, testFile := range group.testFiles {
 			violations = append(violations, Violation{
 				Type:  ViolationTestNaming,
 				File:  testFile,
-				Issue: fmt.Sprintf("Multiple orphaned test files with base name '%s' and no implementation file", baseName),
-				Rule:  "strict_test_naming: Each test file must have a corresponding implementation file",
-				Fix:   fmt.Sprintf("Create implementation file '%s.go' or consolidate/rename test files", baseName),
+				Issue: fmt.Sprintf("Test file '%s' has no corresponding implementation file", filepath.Base(testFile)),
+				Rule:  "strict_test_naming: Each test file must have a corresponding implementation file (foo_test.go -> foo.go)",
+				Fix:   fmt.Sprintf("Create implementation file '%s.go' in the same directory, or remove/rename the orphaned test file", baseName),
 			})
 		}
 	}
+
+	// NOTE: We do NOT check for missing test files (implCount > 0 && testCount == 0)
+	// Test coverage metrics already handle that - this rule only catches orphaned tests
 
 	return violations
 }

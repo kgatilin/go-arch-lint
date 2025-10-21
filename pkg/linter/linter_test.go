@@ -1648,7 +1648,7 @@ func TestPresets_RequireBlackboxDefault(t *testing.T) {
 	}
 }
 
-func TestRun_StrictTestNaming_MissingTestFile(t *testing.T) {
+func TestRun_StrictTestNaming_MissingTestFile_NoViolation(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create .goarchlint config with strict_test_naming enabled
@@ -1697,21 +1697,9 @@ func Foo() string {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	// Should have violation for missing test file
-	if violationsOutput == "" {
-		t.Fatal("expected violations for missing test file, got none")
-	}
-
-	if !strings.Contains(violationsOutput, "Test Naming Convention") {
-		t.Errorf("expected 'Test Naming Convention' violation, got: %s", violationsOutput)
-	}
-
-	if !strings.Contains(violationsOutput, "no corresponding test file") {
-		t.Errorf("expected error about missing test file, got: %s", violationsOutput)
-	}
-
-	if !strings.Contains(violationsOutput, "foo.go") {
-		t.Errorf("expected violation to reference foo.go, got: %s", violationsOutput)
+	// Should have NO violations - missing test files are handled by coverage metrics
+	if violationsOutput != "" {
+		t.Errorf("expected no violations for missing test file (coverage handles this), got: %s", violationsOutput)
 	}
 }
 
